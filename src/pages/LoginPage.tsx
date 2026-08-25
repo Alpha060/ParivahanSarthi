@@ -38,7 +38,11 @@ export const LoginPage: React.FC = () => {
       ? `${fromState.pathname}${fromState.search || ''}` 
       : null;
     const redirectParam = searchParams.get('redirect') || searchParams.get('returnTo');
-    return fromPath || redirectParam || defaultFallback;
+    const target = fromPath || redirectParam;
+    if (!target || target === '/' || target === '/login' || target === '%2F') {
+      return defaultFallback;
+    }
+    return target;
   };
   
   // Login Tab

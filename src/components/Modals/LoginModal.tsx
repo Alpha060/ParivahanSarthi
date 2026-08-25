@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, Phone, ShieldCheck, Lock, ArrowRight, X, KeyRound, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -8,6 +9,7 @@ interface LoginModalProps {
 }
 
 export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
+  const navigate = useNavigate();
   const { darkMode, login } = useApp();
   const [activeTab, setActiveTab] = useState<'citizen' | 'aadhaar' | 'official'>('citizen');
   const [mobileNumber, setMobileNumber] = useState('');
@@ -35,7 +37,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
       setTimeout(() => {
         setIsSuccess(false);
         onClose();
-      }, 700);
+        navigate('/officer-dashboard');
+      }, 500);
       return;
     }
 
@@ -62,7 +65,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
         setOtpSent(false);
         setOtpValue('');
         onClose();
-      }, 700);
+        navigate('/applications');
+      }, 500);
     }
   };
 
@@ -158,7 +162,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                 {activeTab === 'citizen' ? (
                   <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus-within:bg-white focus-within:border-[#0056D2] focus-within:ring-2 focus-within:ring-blue-100 transition">
                     <span className="px-3 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold border-r border-slate-200 dark:border-slate-600 flex items-center gap-1 select-none">
-                      <span className="text-sm">🇮🇳</span> +91
+                      <span className="text-[10px] font-black bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-800 dark:text-slate-200">IND</span> +91
                     </span>
                     <input
                       type="tel"
