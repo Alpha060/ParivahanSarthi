@@ -1,0 +1,198 @@
+// Prisma Schema for Parivahan Sarathi Portal
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  mobile       String        @unique
+  email        String?
+  aadhaarHash  String?
+  role         String        @default("CITIZEN") // CITIZEN, RTO_OFFICER, ADMIN, MEDICAL_DOCTOR, ENFORCEMENT_OFFICER
+  state        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  applications Application[]
+
+  @@index([role])
+}
+
+model Officer {
+  id             String   @id @default(cuid())
+  staffId        String   @unique
+  name           String
+  mobile         String
+  email          String
+  role           String   @default("MLO_OFFICER") // MLO_OFFICER, ADTT_INSPECTOR, ENFORCEMENT_OFFICER, RTO_DIRECTOR, DISPATCH_NODAL, SUPER_ADMIN
+  roleLabel      String
+  designation    String
+  rtoCode        String
+  rtoName        String
+  state          String
+  permissions    String   @default("SCRUTINY_APPROVE,ADTT_CLEARANCE") // Comma-separated permissions
+  isActive       Boolean  @default(true)
+  commissionedAt String
+  lastActive     String   @default("Active Now")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([staffId])
+  @@index([rtoCode])
+  @@index([role])
+}
+
+model Application {
+  id              String               @id @default(cuid())
+  applicationId   String               @unique // e.g. DL1234567890123
+  userId          String?
+  user            User?                @relation(fields: [userId], references: [id])
+  type            String               // Driving Licence (LMV), Learner Licence, Renewal, etc.
+  subType         String               // New Permanent DL, e-KYC Renewal, etc.
+  vehicleClass    String               // LMV, MCWG, HMV
+  applicantName   String
+  mobile          String
+  state           String
+  rtoCode         String
+  rtoName         String
+  currentStep     Int                  @default(1) // 1 to 9
+  currentStepName String               @default("Application Submitted Online")
+  status          String               @default("IN_PROGRESS") // IN_PROGRESS, APPROVED, REJECTED, UPCOMING
+  statusLabel     String               @default("In Progress")
+  statusColor     String               @default("#137333")
+  speedPostNo     String?
+  submittedAt     DateTime             @default(now())
+  approvedAt      DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  steps           ApplicationStep[]
+  appointments    Appointment[]
+  payments        PaymentTransaction[]
+
+  @@index([userId])
+  @@index([mobile])
+  @@index([status])
+  @@index([rtoCode])
+  @@index([submittedAt])
+}
+
+model ApplicationStep {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  stepNumber    Int
+  stepName      String
+  isCompleted   Boolean     @default(false)
+  isCurrent     Boolean     @default(false)
+  completedAt   String?
+  remarks       String?
+
+  @@unique([applicationId, stepNumber])
+  @@index([applicationId])
+}
+
+model Appointment {
+  id              String       @id @default(cuid())
+  appointmentId   String       @unique // e.g. APT-2024-91823
+  applicationId   String?
+  application     Application? @relation(fields: [applicationId], references: [id])
+  applicantName   String
+  mobile          String
+  rtoCode         String
+  rtoName         String
+  serviceType     String       // Driving Skill Test, Biometrics, etc.
+  appointmentDate String       // e.g. 20 May 2024
+  timeSlot        String       // e.g. 10:30 AM - 11:30 AM
+  tokenNumber     String       // e.g. TKN-042
+  status          String       @default("CONFIRMED") // CONFIRMED, RESCHEDULED, CANCELLED, COMPLETED
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([applicationId])
+  @@index([rtoCode, appointmentDate])
+  @@index([status])
+}
+
+model PaymentTransaction {
+  id            String       @id @default(cuid())
+  transactionId String       @unique // e.g. TXN-SAR-892837
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id])
+  applicantName String
+  amount        Float
+  baseFee       Float        @default(0)
+  testFee       Float        @default(0)
+  smartCardFee  Float        @default(0)
+  postalFee     Float        @default(0)
+  lateFee       Float        @default(0)
+  paymentMode   String       @default("UPI") // UPI, NET_BANKING, DEBIT_CARD
+  status        String       @default("SUCCESS") // SUCCESS, PENDING, FAILED
+  bankRefNo     String?
+  reconciledAt  DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([applicationId])
+  @@index([status])
+  @@index([transactionId])
+}
+
+model RtoOffice {
+  id           String   @id @default(cuid())
+  code         String   @unique // e.g. JH-01
+  name         String
+  city         String
+  state        String
+  address      String
+  phone        String
+  email        String
+  workingHours String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([state])
+  @@index([city])
+  @@index([code])
+}
+
+model Grievance {
+  id              String   @id @default(cuid())
+  ticketId        String   @unique // e.g. GRV-2024-88492
+  applicationId   String?
+  applicantName   String
+  mobile          String
+  category        String
+  description     String
+  status          String   @default("OPEN") // OPEN, INVESTIGATING, RESOLVED
+  resolutionNotes String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([applicationId])
+  @@index([mobile])
+  @@index([status])
+}
+
+model Notice {
+  id         String   @id @default(cuid())
+  noticeId   String   @unique
+  type       String   // New, Update, Info
+  badgeColor String
+  badgeBg    String
+  title      String
+  date       String
+  content    String
+  isActive   Boolean  @default(true)
+  priority   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([priority, createdAt])
+  @@index([isActive])
+}

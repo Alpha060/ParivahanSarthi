@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 130" fill="none" class="w-full h-full">
+  <!-- Ashoka Lion Capital Vector Emblem Representation -->
+  <g fill="#2D3748">
+    <!-- Top Lions Back/Front -->
+    <path d="M50 8 C46 8, 42 12, 42 18 C42 22, 44 25, 46 27 C44 29, 41 33, 41 38 C41 44, 44 49, 47 52 C45 54, 44 57, 44 60 C44 64, 47 67, 50 67 C53 67, 56 64, 56 60 C56 57, 55 54, 53 52 C56 49, 59 44, 59 38 C59 33, 56 29, 54 27 C56 25, 58 22, 58 18 C58 12, 54 8, 50 8 Z" fill-opacity="0.85"/>
+    <path d="M32 15 C28 15, 25 19, 25 24 C25 28, 27 31, 29 33 C27 35, 25 39, 25 44 C25 50, 28 55, 31 57 C30 59, 29 62, 29 65 C29 68, 32 71, 35 71 C38 71, 40 68, 40 65 C40 62, 39 60, 38 58 C41 55, 43 50, 43 45 C43 40, 41 36, 39 34 C41 32, 42 29, 42 25 C42 19, 38 15, 32 15 Z" fill-opacity="0.75"/>
+    <path d="M68 15 C64 15, 60 19, 60 25 C60 29, 61 32, 63 34 C61 36, 59 40, 59 45 C59 50, 61 55, 64 58 C63 60, 62 62, 62 65 C62 68, 64 71, 67 71 C70 71, 73 68, 73 65 C73 62, 72 59, 71 57 C74 55, 77 50, 77 44 C77 39, 75 35, 73 33 C75 31, 77 28, 77 24 C77 19, 74 15, 68 15 Z" fill-opacity="0.75"/>
+    <!-- Mane details and chest muscles -->
+    <path d="M47 30 C45 35, 45 42, 47 48 C49 50, 51 50, 53 48 C55 42, 55 35, 53 30 Z" fill="#1A202C"/>
+    <circle cx="46" cy="20" r="1.5" fill="#1A202C"/>
+    <circle cx="54" cy="20" r="1.5" fill="#1A202C"/>
+    <circle cx="29" cy="25" r="1.2" fill="#1A202C"/>
+    <circle cx="71" cy="25" r="1.2" fill="#1A202C"/>
+    
+    <!-- Abacus Platform -->
+    <rect x="20" y="72" width="60" height="5" rx="1.5" fill="#1A202C"/>
+    <!-- Ashoka Chakra in Center of Abacus -->
+    <circle cx="50" cy="83" r="7" stroke="#1A202C" stroke-width="1.5" fill="none"/>
+    <circle cx="50" cy="83" r="1.5" fill="#1A202C"/>
+    <line x1="50" y1="76" x2="50" y2="90" stroke="#1A202C" stroke-width="0.8"/>
+    <line x1="43" y1="83" x2="57" y2="83" stroke="#1A202C" stroke-width="0.8"/>
+    <line x1="45" y1="78" x2="55" y2="88" stroke="#1A202C" stroke-width="0.8"/>
+    <line x1="45" y1="88" x2="55" y2="78" stroke="#1A202C" stroke-width="0.8"/>
+    
+    <!-- Bull & Horse reliefs -->
+    <path d="M26 82 C28 80, 33 80, 35 83 C34 85, 30 86, 26 84 Z" fill="#2D3748"/>
+    <path d="M65 82 C67 80, 72 80, 74 83 C73 85, 69 86, 65 84 Z" fill="#2D3748"/>
+
+    <!-- Lower Bell Base / Lotus Foundation -->
+    <path d="M22 92 C26 95, 38 97, 50 97 C62 97, 74 95, 78 92 L76 96 C72 100, 62 102, 50 102 C38 102, 28 100, 24 96 Z" fill="#1A202C"/>
+    <!-- Base Plinth -->
+    <rect x="18" y="103" width="64" height="4" rx="1" fill="#1A202C"/>
+    
+    <!-- Satyameva Jayate Devnagari Script Text Representation -->
+    <text x="50" y="118" font-family="'Plus Jakarta Sans', sans-serif" font-size="7.5" font-weight="700" text-anchor="middle" fill="#1A202C" letter-spacing="0.5">सत्यमेव जयते</text>
+  </g>
+</svg>
