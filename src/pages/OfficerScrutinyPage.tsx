@@ -144,6 +144,10 @@ export const OfficerScrutinyPage: React.FC = () => {
   };
 
   const filtered = applications.filter((app) => {
+    if (app.paymentStatus === 'PENDING' || app.status === 'DRAFT_PAYMENT_PENDING') {
+      return false;
+    }
+
     const query = searchQuery.toLowerCase();
     const matchesQuery = 
       (app.applicationId || '').toLowerCase().includes(query) ||
@@ -157,9 +161,9 @@ export const OfficerScrutinyPage: React.FC = () => {
     return matchesQuery && matchesCategory && matchesStatus;
   });
 
-  const pendingCount = applications.filter(a => a.status === 'IN_PROGRESS').length;
-  const approvedCount = applications.filter(a => a.status === 'APPROVED').length;
-  const rejectedCount = applications.filter(a => a.status === 'REJECTED').length;
+  const pendingCount = applications.filter(a => (a.status === 'IN_PROGRESS' || a.status === 'in-progress') && a.paymentStatus !== 'PENDING').length;
+  const approvedCount = applications.filter(a => a.status === 'APPROVED' || a.status === 'approved').length;
+  const rejectedCount = applications.filter(a => a.status === 'REJECTED' || a.status === 'rejected').length;
 
   return (
     <div className={`min-h-screen py-6 sm:py-8 transition-colors duration-200 ${

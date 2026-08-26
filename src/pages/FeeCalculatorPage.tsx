@@ -1,382 +1,504 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Calculator, 
   IndianRupee, 
   CheckCircle2, 
   ArrowRight, 
   ShieldCheck, 
-  Printer,
-  CreditCard,
-  Building,
-  AlertCircle
+  Printer, 
+  FileText, 
+  Car, 
+  Sparkles, 
+  Info, 
+  Layers,
+  HelpCircle,
+  Clock,
+  Send
 } from 'lucide-react';
-import { api } from '../services/api';
 import { useApp } from '../context/AppContext';
 import { printOfficialSlip } from '../utils/printDocument';
 
-export const FeeCalculatorPage: React.FC = () => {
-  const { darkMode } = useApp();
+interface FeeServiceConfig {
+  id: string;
+  name: string;
+  formType: string;
+  baseFee: number;
+  hasTestFee: boolean;
+  testFee: number;
+  hasSmartCard: boolean;
+  smartCardFee: number;
+  ruleRef: string;
+  appRoute: string;
+}
 
-  const [serviceType, setServiceType] = useState('new_dl');
-  const [vehicleCategory, setVehicleCategory] = useState('lmv');
+const STATUTORY_SERVICES: FeeServiceConfig[] = [
+  {
+    id: 'new_ll',
+    name: 'Issue of New Learner Licence (LL)',
+    formType: 'Form 2',
+    baseFee: 150,
+    hasTestFee: true,
+    testFee: 50,
+    hasSmartCard: false,
+    smartCardFee: 0,
+    ruleRef: 'CMVR 1989, Rule 32 Serial No. 1',
+    appRoute: '/apply/new-learner-license'
+  },
+  {
+    id: 'new_dl',
+    name: 'Issue of Permanent Driving Licence (DL)',
+    formType: 'Form 4',
+    baseFee: 200,
+    hasTestFee: true,
+    testFee: 300,
+    hasSmartCard: true,
+    smartCardFee: 200,
+    ruleRef: 'CMVR 1989, Rule 32 Serial No. 4 & 5',
+    appRoute: '/apply/new-driving-license'
+  },
+  {
+    id: 'renew_dl',
+    name: 'Renewal of Driving Licence',
+    formType: 'Form 9',
+    baseFee: 200,
+    hasTestFee: false,
+    testFee: 0,
+    hasSmartCard: true,
+    smartCardFee: 200,
+    ruleRef: 'CMVR 1989, Rule 32 Serial No. 6',
+    appRoute: '/apply/renew-license'
+  },
+  {
+    id: 'add_cov',
+    name: 'Addition of Another Vehicle Class (COV)',
+    formType: 'Form 8',
+    baseFee: 500,
+    hasTestFee: true,
+    testFee: 300,
+    hasSmartCard: true,
+    smartCardFee: 200,
+    ruleRef: 'CMVR 1989, Rule 32 Serial No. 7',
+    appRoute: '/apply/new-driving-license'
+  },
+  {
+    id: 'duplicate_dl',
+    name: 'Issue of Duplicate Driving Licence',
+    formType: 'Form LLD',
+    baseFee: 200,
+    hasTestFee: false,
+    testFee: 0,
+    hasSmartCard: true,
+    smartCardFee: 200,
+    ruleRef: 'CMVR 1989, Rule 32 Serial No. 8',
+    appRoute: '/apply/duplicate-license'
+  },
+  {
+    id: 'idp',
+    name: 'International Driving Permit (IDP)',
+    formType: 'Form 4A',
+    baseFee: 1000,
+    hasTestFee: false,
+    testFee: 0,
+    hasSmartCard: false,
+    smartCardFee: 0,
+    ruleRef: 'CMVR 1989, Rule 32 Serial No. 12',
+    appRoute: '/apply/international-permit'
+  },
+  {
+    id: 'address_change',
+    name: 'Change of Address in Driving Licence',
+    formType: 'Form 11',
+    baseFee: 200,
+    hasTestFee: false,
+    testFee: 0,
+    hasSmartCard: true,
+    smartCardFee: 200,
+    ruleRef: 'CMVR 1989, Rule 32 Serial No. 10',
+    appRoute: '/apply/renew-license'
+  }
+];
+
+export const FeeCalculatorPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { darkMode, currentState } = useApp();
+
+  const [selectedServiceId, setSelectedServiceId] = useState('new_dl');
+  const [vehicleCategory, setVehicleCategory] = useState<'single' | 'both' | 'heavy'>('single');
   const [includeSmartCard, setIncludeSmartCard] = useState(true);
   const [includePostal, setIncludePostal] = useState(true);
   const [lateMonths, setLateMonths] = useState(0);
 
-  const [breakdown, setBreakdown] = useState<any>({
-    baseFee: 200,
-    testFee: 300,
-    smartCardFee: 200,
-    postalFee: 50,
-    lateFee: 0,
-    totalAmount: 750,
-    statutoryRule: 'Central Motor Vehicles Rules (CMVR) 1989, Rule 32'
-  });
+  const activeService = useMemo(() => {
+    return STATUTORY_SERVICES.find(s => s.id === selectedServiceId) || STATUTORY_SERVICES[1];
+  }, [selectedServiceId]);
 
-  const [isPaying, setIsPaying] = useState(false);
-  const [paymentSuccess, setPaymentSuccess] = useState<any>(null);
-  const [selectedGateway, setSelectedGateway] = useState('UPI');
+  // Dynamic CMVR Rule 32 Calculation Engine
+  const calculation = useMemo(() => {
+    let multiplier = 1;
+    if (vehicleCategory === 'both') multiplier = 2;
+    if (vehicleCategory === 'heavy') multiplier = 1.5;
 
-  useEffect(() => {
-    calculateLive();
-  }, [serviceType, vehicleCategory, includeSmartCard, includePostal, lateMonths]);
+    const baseFee = Math.round(activeService.baseFee * (selectedServiceId === 'new_ll' || selectedServiceId === 'new_dl' ? multiplier : 1));
+    const testFee = activeService.hasTestFee ? Math.round(activeService.testFee * (vehicleCategory === 'both' ? 2 : 1)) : 0;
+    const smartCardFee = (activeService.hasSmartCard && includeSmartCard) ? activeService.smartCardFee : 0;
+    const postalFee = includePostal ? 50 : 0;
+    const lateFee = lateMonths > 0 ? lateMonths * 100 : 0;
 
-  const calculateLive = async () => {
-    try {
-      const res = await api.calculateFee({
-        serviceType,
-        vehicleCategory,
-        includeSmartCard,
-        includePostal,
-        lateMonths
-      });
-      if (res.success && res.breakdown) {
-        setBreakdown(res.breakdown);
-      }
-    } catch (err) {
-      // Fallback
-    }
-  };
+    const total = baseFee + testFee + smartCardFee + postalFee + lateFee;
 
-  const handlePayNow = async () => {
-    setIsPaying(true);
-    try {
-      const res = await api.initiatePayment({
-        applicationId: 'DL1234567890123',
-        applicantName: 'Krishna Mahto',
-        amount: breakdown.totalAmount,
-        breakdown,
-        paymentMode: selectedGateway
-      });
+    return {
+      baseFee,
+      testFee,
+      smartCardFee,
+      postalFee,
+      lateFee,
+      total,
+      multiplier
+    };
+  }, [activeService, vehicleCategory, includeSmartCard, includePostal, lateMonths, selectedServiceId]);
 
-      if (res.success && res.payment) {
-        setPaymentSuccess(res.payment);
-      }
-    } catch (err) {
-      alert('Payment processing failed.');
-    } finally {
-      setIsPaying(false);
-    }
+  const handlePrintSlip = () => {
+    printOfficialSlip({
+      title: 'Ministry of Road Transport & Highways',
+      subtitle: 'Government of India • Statutory CMVR Rule 32 Tariff Schedule',
+      documentType: `OFFICIAL STATUTORY TARIFF ASSESSMENT SLIP`,
+      referenceNumber: `FEE-EST-${Date.now().toString().slice(-8)}`,
+      applicantName: 'Citizen Estimator',
+      serviceName: `${activeService.name} (${activeService.formType})`,
+      rtoName: `${currentState} Transport Directorate`,
+      details: [
+        { label: 'Selected Service', value: `${activeService.name} (${activeService.formType})` },
+        { label: 'Vehicle Category Multiplier', value: vehicleCategory === 'both' ? 'Dual Category (2W + 4W)' : vehicleCategory === 'heavy' ? 'Commercial / Heavy Vehicle' : 'Single Category (LMV / MCWG)' },
+        { label: 'Application & Scrutiny Fee', value: `INR ${calculation.baseFee}` },
+        { label: 'Driving Skill Test (ADTT) Fee', value: `INR ${calculation.testFee}` },
+        { label: 'Smart Card Polycarbonate Issuance (Rule 16)', value: `INR ${calculation.smartCardFee}` },
+        { label: 'Speed Post Doorstep Logistics', value: `INR ${calculation.postalFee}` },
+        ...(calculation.lateFee > 0 ? [{ label: 'Late Renewal Surcharge', value: `INR ${calculation.lateFee}` }] : []),
+        { label: 'Total Statutory Payable', value: `INR ${calculation.total}` },
+        { label: 'Statutory Rule Reference', value: activeService.ruleRef }
+      ],
+      highlightBox: {
+        label: 'Statutory Assessment Total',
+        value: `INR ${calculation.total} (Exact MoRTH Tariff)`
+      },
+      footerNotes: [
+        'This calculation is strictly governed under Central Motor Vehicles Rules (CMVR) 1989 Rule 32.',
+        'No additional cash or facilitation fee is payable at any RTO counter.',
+        'Official receipt will be generated upon final application submission and electronic payment.'
+      ]
+    });
   };
 
   return (
     <div className={`min-h-screen py-8 transition-colors duration-200 ${
       darkMode ? 'bg-slate-900 text-slate-100' : 'bg-[#F4F7FB] text-slate-800'
     }`}>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
         
         {/* Breadcrumb Navigation */}
-        <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400 mb-6">
+        <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400">
           <Link to="/" className="hover:text-[#0056D2] font-semibold">Home</Link>
           <span>/</span>
-          <span className="text-[#0056D2] font-bold">Statutory Fee Calculator & Payment</span>
+          <span className="text-[#0056D2] font-bold">Statutory Fee Calculator</span>
         </div>
 
         {/* Header Card */}
-        <div className={`rounded-3xl p-6 sm:p-8 border shadow-md mb-8 ${
+        <div className={`rounded-3xl p-6 sm:p-8 border shadow-md flex flex-col md:flex-row md:items-center justify-between gap-5 ${
           darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200/90'
         }`}>
-          <div className="flex items-center space-x-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 flex items-center justify-center flex-shrink-0">
-              <Calculator className="w-6 h-6" />
+          <div className="flex items-center space-x-4">
+            <div className="w-14 h-14 rounded-2xl bg-blue-100 dark:bg-blue-950/80 text-[#0056D2] dark:text-blue-400 flex items-center justify-center flex-shrink-0 shadow-inner">
+              <Calculator className="w-7 h-7" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-snug">
-                National Statutory Fee Calculator & e-Payment
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-[#0056D2] dark:text-blue-300 text-[10px] font-black uppercase tracking-wider">
+                  MoRTH Statutory Tariff Engine
+                </span>
+                <span className="text-xs text-slate-400 font-bold">
+                  State: <strong>{currentState}</strong>
+                </span>
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight mt-1 text-slate-900 dark:text-white">
+                National Statutory Driving Licence Fee Calculator
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Central Motor Vehicles Rules (CMVR) 1989, Rule 32 Official Fee Assessment & Instant Reconciliation Engine.
+                Accurate, transparent fee calculation computed strictly under <strong>CMVR 1989, Rule 32</strong>.
               </p>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={handlePrintSlip}
+            className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-2 transition cursor-pointer self-start md:self-auto border border-slate-200 dark:border-slate-600 shadow-xs"
+          >
+            <Printer className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+            <span>Print Official Tariff Slip</span>
+          </button>
         </div>
 
-        {/* Content Body */}
-        <div className={`rounded-3xl p-6 sm:p-8 border shadow-xl ${
-          darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200/90'
-        }`}>
+        {/* Calculator Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {paymentSuccess ? (
-            /* Official Executive Payment Receipt */
-            <div className="py-6 text-center space-y-6 animate-in zoom-in-95 duration-200">
-              
-              {/* Executive Cryptographic Verification Seal */}
-              <div className="relative inline-flex items-center justify-center mx-auto">
-                <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-blue-600 p-0.5 shadow-xl shadow-emerald-500/20">
-                  <div className="w-full h-full rounded-[22px] bg-slate-900 flex items-center justify-center border border-emerald-400/30">
-                    <ShieldCheck className="w-10 h-10 text-emerald-400" />
-                  </div>
-                </div>
-                <span className="absolute -bottom-2 px-3 py-0.5 rounded-full bg-emerald-500 text-white font-black text-[9px] uppercase tracking-widest shadow-md">
-                  TREASURY RECONCILED
-                </span>
-              </div>
+          {/* Left Column: Interactive Parameters (7 Cols) */}
+          <div className={`lg:col-span-7 rounded-3xl p-6 sm:p-7 border shadow-xl space-y-6 ${
+            darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200/90'
+          }`}>
+            <h2 className="text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-[#0056D2]" />
+              <span>Step 1: Select Service & Parameters</span>
+            </h2>
 
-              <div>
-                <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
-                  Bharatkosh National Treasury • Form TR-5 Receipt
-                </span>
-                <h2 className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-                  Payment Reconciled & Statutory Receipt Issued
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-                  Reconciled with RBI Central Banking Gateway and synced with Sarathi National Database.
-                </p>
-              </div>
-
-              {/* Receipt Slip */}
-              <div className="max-w-xl mx-auto p-6 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-left space-y-3 text-xs shadow-inner">
-                <div className="flex items-center justify-between border-b dark:border-slate-700 pb-3">
-                  <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold">Transaction Reference</span>
-                    <p className="text-lg font-black text-[#0056D2] dark:text-blue-400">{paymentSuccess.transactionId}</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold">Amount Paid</span>
-                    <p className="text-lg font-black text-emerald-600">₹{paymentSuccess.amount}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <span className="text-slate-400">Application Number:</span>
-                    <p className="font-bold text-slate-800 dark:text-slate-200">{paymentSuccess.applicationId || 'DL1234567890123'}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Bank Reference No:</span>
-                    <p className="font-bold font-mono text-slate-800 dark:text-slate-200">{paymentSuccess.bankRefNo}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Payment Mode:</span>
-                    <p className="font-bold text-slate-800 dark:text-slate-200">{paymentSuccess.paymentMode}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Timestamp:</span>
-                    <p className="font-bold text-slate-800 dark:text-slate-200">{new Date().toLocaleString()}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => printOfficialSlip({
-                    title: 'Statutory Fee Payment & Tax Invoice Receipt',
-                    subtitle: 'Ministry of Road Transport & Highways - CMVR 1989 Rule 32',
-                    documentType: 'Official Payment Receipt',
-                    referenceNumber: paymentSuccess.transactionId,
-                    applicantName: paymentSuccess.applicantName || 'Krishna Mahto',
-                    serviceName: serviceType === 'new_dl' ? 'Issue of Permanent Driving Licence' : 'Transport Service',
-                    details: [
-                      { label: 'Transaction Reference ID', value: paymentSuccess.transactionId },
-                      { label: 'Bank Gateway Reference', value: paymentSuccess.bankRefNo },
-                      { label: 'Sarathi Application Number', value: paymentSuccess.applicationId || 'DL1234567890123' },
-                      { label: 'Applicant Name', value: paymentSuccess.applicantName || 'Krishna Mahto' },
-                      { label: 'Payment Mode', value: paymentSuccess.paymentMode || 'BHIM / UPI' },
-                      { label: 'Application Form & Processing Fee', value: `₹${breakdown.baseFee}` },
-                      { label: 'Automated Driving Test (ADTT)', value: `₹${breakdown.testFee}` },
-                      { label: 'Smart Card Polycarbonate Issuance', value: `₹${breakdown.smartCardFee}` },
-                      { label: 'Speed Post Dispatch Charges', value: `₹${breakdown.postalFee}` },
-                      { label: 'Total Reconciled Amount', value: `₹${paymentSuccess.amount}` }
-                    ],
-                    highlightBox: {
-                      label: 'RBI Core Banking Reconciliation Status',
-                      value: `SUCCESS (₹${paymentSuccess.amount} Reconciled)`
-                    },
-                    footerNotes: [
-                      'This e-Receipt is an authentic proof of statutory CMVR payment.',
-                      'No further fee or service charge is payable at any RTO counter.',
-                      'In case of any reconciliation queries, quote the Transaction Reference ID: ' + paymentSuccess.transactionId
-                    ]
-                  })}
-                  className="px-6 py-3 rounded-2xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-2 cursor-pointer shadow-xs border border-slate-200 dark:border-slate-600"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>Print Tax Invoice & Receipt</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentSuccess(null)}
-                  className="px-6 py-3 rounded-2xl bg-[#0056D2] hover:bg-blue-700 text-white text-xs font-bold cursor-pointer shadow-md"
-                >
-                  Calculate Another Fee
-                </button>
+            {/* 1. Service Selector */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                Statutory Driving Licence Service
+              </label>
+              <div className="space-y-2">
+                {STATUTORY_SERVICES.map(s => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSelectedServiceId(s.id)}
+                    className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition cursor-pointer ${
+                      selectedServiceId === s.id
+                        ? 'bg-blue-50 dark:bg-blue-950/60 border-[#0056D2] text-[#0056D2] shadow-xs'
+                        : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-slate-900 dark:text-white">{s.name}</span>
+                        <span className="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-bold">
+                          {s.formType}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 mt-0.5 block">{s.ruleRef}</span>
+                    </div>
+                    <span className="text-xs font-mono font-black text-slate-900 dark:text-white">
+                      Base: ₹{s.baseFee}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
-          ) : (
-            <div className="space-y-6">
-              
-              {/* Service Category */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Select Driving Licence Service
-                </label>
-                <select
-                  value={serviceType}
-                  onChange={(e) => setServiceType(e.target.value)}
-                  className="w-full px-4 py-3 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-2xl border border-slate-300 dark:border-slate-700 text-xs font-semibold focus:border-[#0056D2] focus:ring-2 focus:ring-blue-100"
-                >
-                  <option value="new_ll">Issue of Learner Licence (LL) - Form 2</option>
-                  <option value="new_dl">Issue of Permanent Driving Licence (DL) - Form 4</option>
-                  <option value="renew_dl">Renewal of Driving Licence - Form 9</option>
-                  <option value="endorse">Addition of Another Vehicle Class (COV)</option>
-                  <option value="duplicate_dl">Duplicate Driving Licence (Lost/Damage)</option>
-                  <option value="idp">International Driving Permit (IDP)</option>
-                </select>
-              </div>
 
-              {/* Vehicle Category */}
+            {/* 2. Vehicle Class Multiplier */}
+            {(selectedServiceId === 'new_ll' || selectedServiceId === 'new_dl' || selectedServiceId === 'add_cov') && (
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Vehicle Category
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                  Vehicle Class (Class of Vehicle - COV)
                 </label>
-                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div className="grid grid-cols-3 gap-2.5">
                   {[
-                    { id: 'mcwg', label: '2-Wheeler' },
-                    { id: 'lmv', label: '4-Wheeler' },
-                    { id: 'both', label: 'Both (2W+4W)' }
-                  ].map((v) => (
+                    { id: 'single', label: 'Single Class', sub: 'MCWG or LMV', badge: '1x Fee' },
+                    { id: 'both', label: 'Dual Class', sub: '2-Wheeler + Car', badge: '2x Base' },
+                    { id: 'heavy', label: 'Commercial/Heavy', sub: 'HGMV / Transport', badge: '1.5x Fee' }
+                  ].map(v => (
                     <button
                       key={v.id}
                       type="button"
-                      onClick={() => setVehicleCategory(v.id)}
-                      className={`p-2.5 sm:p-3 rounded-2xl border text-[11px] sm:text-xs font-bold transition cursor-pointer text-center ${
+                      onClick={() => setVehicleCategory(v.id as any)}
+                      className={`p-3 rounded-2xl border text-center transition cursor-pointer ${
                         vehicleCategory === v.id
-                          ? 'bg-blue-50 dark:bg-blue-950 border-[#0056D2] text-[#0056D2] shadow-xs'
-                          : 'bg-white dark:bg-slate-900 border-slate-250 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-300'
+                          ? 'bg-blue-50 dark:bg-blue-950/60 border-[#0056D2] text-[#0056D2] shadow-xs'
+                          : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300'
                       }`}
                     >
-                      {v.label}
+                      <span className="block text-xs font-extrabold text-slate-900 dark:text-white">{v.label}</span>
+                      <span className="block text-[10px] text-slate-400 mt-0.5">{v.sub}</span>
+                      <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-[9px] font-bold text-slate-600 dark:text-slate-300">
+                        {v.badge}
+                      </span>
                     </button>
                   ))}
                 </div>
               </div>
+            )}
 
-              {/* Add-ons */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
-                <label className="flex items-center space-x-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={includeSmartCard}
-                    onChange={(e) => setIncludeSmartCard(e.target.checked)}
-                    className="w-4 h-4 rounded text-blue-600"
-                  />
-                  <span>PVC Smart Card Driving Licence issuance charge (Form 7) (+₹200)</span>
+            {/* 3. Statutory Add-ons */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                Statutory Options & Logistics
+              </span>
+
+              {activeService.hasSmartCard && (
+                <label className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer select-none">
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={includeSmartCard}
+                      onChange={(e) => setIncludeSmartCard(e.target.checked)}
+                      className="w-4 h-4 rounded text-blue-600"
+                    />
+                    <div>
+                      <span>PVC Polycarbonate Smart Card (Rule 16)</span>
+                      <span className="block text-[10px] text-slate-400 font-normal">High-security tamper-evident chip format</span>
+                    </div>
+                  </div>
+                  <span className="font-mono text-emerald-600 dark:text-emerald-400">+₹200</span>
                 </label>
+              )}
 
-                <label className="flex items-center space-x-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer">
+              <label className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer select-none">
+                <div className="flex items-center gap-2.5">
                   <input
                     type="checkbox"
                     checked={includePostal}
                     onChange={(e) => setIncludePostal(e.target.checked)}
                     className="w-4 h-4 rounded text-blue-600"
                   />
-                  <span>Speed Post Doorstep Residential Delivery via India Post (+₹50)</span>
-                </label>
-              </div>
-
-              {/* Statutory CMVR Breakdown Card */}
-              <div className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-3 text-xs text-slate-800 dark:text-slate-200">
-                <div className="flex items-center justify-between border-b dark:border-slate-700 pb-2">
-                  <span className="font-bold text-slate-400 uppercase text-[10px]">Statutory Assessment</span>
-                  <span className="text-[10px] text-blue-600 font-semibold">{breakdown.statutoryRule}</span>
-                </div>
-
-                <div className="flex justify-between">
-                  <span className="text-slate-600 dark:text-slate-400">Application Form & Processing Fee:</span>
-                  <span className="font-bold">₹{breakdown.baseFee}</span>
-                </div>
-
-                {breakdown.testFee > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-400">Automated Driving Skill Test Fee (ADTT):</span>
-                    <span className="font-bold">₹{breakdown.testFee}</span>
+                  <div>
+                    <span>Speed Post Doorstep Delivery (India Post)</span>
+                    <span className="block text-[10px] text-slate-400 font-normal">Secure postal dispatch with SMS tracking</span>
                   </div>
-                )}
-
-                {includeSmartCard && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-400">Smart Card Polycarbonate DL (Rule 16):</span>
-                    <span className="font-bold">₹{breakdown.smartCardFee}</span>
-                  </div>
-                )}
-
-                {includePostal && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-600 dark:text-slate-400">Speed Post Dispatch Logistics:</span>
-                    <span className="font-bold">₹{breakdown.postalFee}</span>
-                  </div>
-                )}
-
-                <div className="border-t dark:border-slate-700 pt-3 flex justify-between items-center text-sm font-black">
-                  <span>Total Payable Statutory Fee:</span>
-                  <span className="text-xl text-emerald-600 dark:text-emerald-400">₹{breakdown.totalAmount}</span>
                 </div>
-              </div>
+                <span className="font-mono text-emerald-600 dark:text-emerald-400">+₹50</span>
+              </label>
+            </div>
 
-              {/* Payment Mode Selector */}
+            {/* 4. Late Penalty Slider for Renewal */}
+            {selectedServiceId === 'renew_dl' && (
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
-                  Select Payment Gateway / Method
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { id: 'UPI', label: 'BHIM / UPI / QR' },
-                    { id: 'NET_BANKING', label: 'SBI / Canara ePay' },
-                    { id: 'DEBIT_CARD', label: 'RuPay / Debit Card' }
-                  ].map((g) => (
-                    <button
-                      key={g.id}
-                      type="button"
-                      onClick={() => setSelectedGateway(g.id)}
-                      className={`p-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
-                        selectedGateway === g.id
-                          ? 'bg-blue-50 dark:bg-blue-950 border-[#0056D2] text-[#0056D2]'
-                          : 'bg-white dark:bg-slate-900 border-slate-250 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-300'
-                      }`}
-                    >
-                      {g.label}
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Expired Beyond Grace Period (30 Days)
+                  </label>
+                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                    {lateMonths} Months Late (+₹{lateMonths * 100})
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="12"
+                  step="1"
+                  value={lateMonths}
+                  onChange={(e) => setLateMonths(parseInt(e.target.value))}
+                  className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                />
+                <span className="text-[10px] text-slate-400 block mt-1">
+                  CMVR statutory late fee: ₹100 per additional month expired.
+                </span>
+              </div>
+            )}
+
+          </div>
+
+          {/* Right Column: Live Statutory Assessment Card (5 Cols) */}
+          <div className="lg:col-span-5 space-y-5">
+            
+            <div className={`rounded-3xl p-6 sm:p-7 border shadow-xl space-y-5 ${
+              darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200/90'
+            }`}>
+              <div className="flex items-center justify-between border-b dark:border-slate-700 pb-3">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#0056D2] dark:text-blue-400">
+                    Statutory Assessment
+                  </span>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white mt-0.5">
+                    Itemized MoRTH Breakdown
+                  </h3>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase">
+                  CMVR 1989
+                </span>
+              </div>
+
+              {/* Itemized Lines */}
+              <div className="space-y-3 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600 dark:text-slate-400">
+                    Application & Scrutiny Fee ({activeService.formType}):
+                  </span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-white">₹{calculation.baseFee}</span>
+                </div>
+
+                {calculation.testFee > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-600 dark:text-slate-400">
+                      Automated Driving Test (ADTT):
+                    </span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">₹{calculation.testFee}</span>
+                  </div>
+                )}
+
+                {calculation.smartCardFee > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-600 dark:text-slate-400">
+                      Polycarbonate Smart Card (Rule 16):
+                    </span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">₹{calculation.smartCardFee}</span>
+                  </div>
+                )}
+
+                {calculation.postalFee > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-600 dark:text-slate-400">
+                      Speed Post Logistics Dispatch:
+                    </span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">₹{calculation.postalFee}</span>
+                  </div>
+                )}
+
+                {calculation.lateFee > 0 && (
+                  <div className="flex justify-between items-center text-amber-600 dark:text-amber-400">
+                    <span>Late Renewal Surcharge:</span>
+                    <span className="font-mono font-bold">₹{calculation.lateFee}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Total Card */}
+              <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase">
+                    Total Estimated Statutory Fee
+                  </span>
+                  <p className="text-2xl font-black text-emerald-700 dark:text-emerald-300 mt-0.5">
+                    ₹{calculation.total}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 block">No hidden charges</span>
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">100% Treasury Verified</span>
                 </div>
               </div>
 
-              {/* Pay Now Button */}
-              <div>
+              {/* Action Buttons */}
+              <div className="space-y-2.5 pt-2">
                 <button
                   type="button"
-                  onClick={handlePayNow}
-                  disabled={isPaying}
-                  className="w-full bg-[#0056D2] hover:bg-blue-700 text-white py-3.5 rounded-2xl text-xs font-bold flex items-center justify-center space-x-2 shadow-lg transition cursor-pointer"
+                  onClick={() => navigate(activeService.appRoute)}
+                  className="w-full bg-[#0056D2] hover:bg-blue-700 active:scale-98 text-white py-3.5 px-4 rounded-2xl text-xs font-bold transition flex items-center justify-center space-x-2 shadow-md cursor-pointer"
                 >
-                  <span>{isPaying ? 'Connecting to Core Banking (CBS)...' : `Pay ₹${breakdown.totalAmount} & Reconcile Payment`}</span>
+                  <span>Apply Now with this Calculated Fee</span>
                   <ArrowRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePrintSlip}
+                  className="w-full py-3 rounded-2xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Download / Print Tariff Assessment</span>
                 </button>
               </div>
 
+              {/* Statutory Note */}
+              <div className="flex items-start gap-2 text-[11px] text-slate-400 dark:text-slate-400 pt-2 border-t dark:border-slate-700">
+                <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  Note: Payment is executed securely during online application submission. If preferred, payment can be deferred and completed later from the citizen portal.
+                </p>
+              </div>
+
             </div>
-          )}
+
+          </div>
 
         </div>
 

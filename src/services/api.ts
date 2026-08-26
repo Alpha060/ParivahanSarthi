@@ -39,10 +39,10 @@ async function safeFetch<T = any>(url: string, options?: RequestInit, fallback?:
       if (errorData && (errorData.error || errorData.message)) {
         return errorData;
       }
-      if (res.status >= 502 && fallback) {
+      if ((res.status === 404 || res.status >= 500) && fallback) {
         return await fallback();
       }
-      return { success: false, error: `Server response ${res.status}: ${res.statusText}` };
+      return { success: false, error: `Server response ${res.status}: ${res.statusText || 'Endpoint unavailable'}` };
     }
     const contentType = res.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
@@ -228,6 +228,9 @@ export const api = {
     state?: string;
     rtoCode: string;
     rtoName?: string;
+    feeAmount?: number;
+    paymentStatus?: 'PAID' | 'PENDING';
+    status?: string;
   }): Promise<any> {
     return safeFetch(
       `${API_BASE_URL}/applications`,
@@ -240,6 +243,7 @@ export const api = {
         const randomDigits = Math.floor(100000000000 + Math.random() * 900000000000);
         const prefix = data.type.toLowerCase().includes('learner') ? 'LL' : 'DL';
         const applicationId = `${prefix}${randomDigits}`;
+        const isPaid = data.paymentStatus === 'PAID' || (data.feeAmount === 0);
 
         const newApp = {
           id: applicationId,
@@ -255,10 +259,12 @@ export const api = {
           currentStep: 1,
           stepNumber: 1,
           totalSteps: 9,
-          currentStepName: 'Application Submitted Online',
-          status: 'in-progress',
-          statusLabel: 'In Progress',
-          statusColor: '#137333',
+          currentStepName: isPaid ? 'Application Submitted Online' : 'Draft Saved - Payment Pending',
+          status: isPaid ? 'in-progress' : 'DRAFT_PAYMENT_PENDING',
+          statusLabel: isPaid ? 'In Progress' : 'Draft (Payment Pending)',
+          statusColor: isPaid ? '#137333' : '#D97706',
+          paymentStatus: isPaid ? 'PAID' : 'PENDING',
+          feeAmount: data.feeAmount || 0,
           submittedDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
         };
 
@@ -267,9 +273,44 @@ export const api = {
 
         return {
           success: true,
-          message: 'Application registered successfully in Sarathi Central Register',
+          message: isPaid 
+            ? 'Application registered successfully in Sarathi Central Register' 
+            : 'Application saved as draft. Statutory payment pending before submission to RTO.',
           applicationId,
           application: newApp
+        };
+      }
+    );
+  },
+
+  async settleApplicationPayment(applicationId: string, paymentMode: string): Promise<any> {
+    return safeFetch(
+      `${API_BASE_URL}/applications/${applicationId}/pay`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentMode })
+      },
+      () => {
+        const localApps = getLocalStored<any[]>(STORAGE_KEYS.APPLICATIONS, MOCK_APPLICATIONS);
+        const updated = localApps.map(app => {
+          if (app.id === applicationId || app.applicationId === applicationId) {
+            return {
+              ...app,
+              paymentStatus: 'PAID',
+              status: 'in-progress',
+              statusLabel: 'In Progress',
+              statusColor: '#137333',
+              currentStepName: 'Application Submitted Online (Scrutiny Queue)',
+              paidAt: new Date().toISOString()
+            };
+          }
+          return app;
+        });
+        setLocalStored(STORAGE_KEYS.APPLICATIONS, updated);
+        return {
+          success: true,
+          message: 'Payment settled successfully. Application transmitted to RTO scrutiny queue.'
         };
       }
     );
@@ -283,10 +324,52 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ...data })
       },
-      () => ({
-        success: true,
-        message: `Officer action ${action} simulated for ${applicationId}`
-      })
+      () => {
+        const localApps = getLocalStored<any[]>(STORAGE_KEYS.APPLICATIONS, MOCK_APPLICATIONS);
+        const updated = localApps.map(app => {
+          if (app.id === applicationId || app.applicationId === applicationId) {
+            if (action === 'APPROVE') {
+              return { 
+                ...app, 
+                status: 'APPROVED', 
+                currentStep: 9, 
+                currentStepName: 'Driving Licence Issued & Dispatched',
+                dlNumber: app.dlNumber || `JH01 2026${Math.floor(1000000 + Math.random() * 9000000)}` 
+              };
+            }
+            if (action === 'REJECT') {
+              return { 
+                ...app, 
+                status: 'REJECTED', 
+                rejectionReason: data?.remarks || 'Discrepancy in documents / biometric mismatch' 
+              };
+            }
+            if (action === 'TEST_PASS') {
+              return { 
+                ...app, 
+                status: 'APPROVED', 
+                currentStep: 8, 
+                currentStepName: 'DL Printing & Dispatch Queue',
+                testScore: data?.testGrade || 'Passed' 
+              };
+            }
+            if (action === 'ADVANCE_STEP') {
+              const nextStep = Math.min(9, (app.currentStep || 1) + 1);
+              return { 
+                ...app, 
+                currentStep: nextStep,
+                status: nextStep >= 8 ? 'APPROVED' : app.status 
+              };
+            }
+          }
+          return app;
+        });
+        setLocalStored(STORAGE_KEYS.APPLICATIONS, updated);
+        return {
+          success: true,
+          message: `Officer action ${action} executed successfully for ${applicationId}`
+        };
+      }
     );
   },
 

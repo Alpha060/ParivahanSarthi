@@ -111,14 +111,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // 3. Role-specific validation
-  const officialRoles = ['OFFICIAL', 'MLO_OFFICER', 'ADTT_INSPECTOR', 'DISPATCH_NODAL', 'RTO_DIRECTOR'];
+  const officialRoles = ['OFFICIAL', 'MLO_OFFICER', 'ADTT_INSPECTOR', 'DISPATCH_NODAL', 'RTO_DIRECTOR', 'ADMIN', 'SUPER_ADMIN'];
   const hasAccess = 
     requiredRole === 'LOGGED_IN' ||
     requiredRole === user.role ||
     (requiredRole === 'OFFICIAL' && officialRoles.includes(user.role)) ||
-    (requiredRole === 'CITIZEN' && (user.role === 'CITIZEN' || !user.role));
+    (requiredRole === 'CITIZEN' && (user.role === 'CITIZEN' || !user.role || officialRoles.includes(user.role)));
 
   if (!hasAccess) {
+    const isUserOfficer = officialRoles.includes(user.role);
+    const destinationDesk = isUserOfficer ? '/officer-dashboard' : '/applications';
+    const destinationLabel = isUserOfficer ? 'Go to Officer Command Workdesk' : 'My Citizen Dossiers';
+
     return (
       <div className={`min-h-[80vh] flex items-center justify-center p-4 transition-colors ${
         darkMode ? 'bg-slate-900 text-slate-100' : 'bg-[#F4F7FB] text-slate-800'
@@ -138,7 +142,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
               Unauthorized Role Access
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-              You are currently authenticated as a Citizen (<strong>{user.name}</strong>). The RTO Command Console is reserved exclusively for statutory Transport Officers & MLO Inspectors.
+              You are currently authenticated as <strong>{user.name}</strong> ({user.role}). This portal area requires <strong>{requiredRole}</strong> clearance.
             </p>
           </div>
 
@@ -149,28 +153,28 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Required Role:</span>
-              <strong className="text-amber-600 font-bold uppercase">OFFICIAL / MLO</strong>
+              <strong className="text-amber-600 font-bold uppercase">{requiredRole}</strong>
             </div>
           </div>
 
           <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+            <Link
+              to={destinationDesk}
+              className="flex-1 bg-[#0056D2] hover:bg-blue-700 text-white py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition"
+            >
+              <span>{destinationLabel}</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
             <button
               type="button"
               onClick={() => {
                 logout();
                 navigate('/login');
               }}
-              className="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-md cursor-pointer transition"
+              className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center justify-center gap-1.5 transition cursor-pointer"
             >
-              <span>Switch to Officer Login</span>
-              <ArrowRight className="w-4 h-4" />
+              <span>Switch Account</span>
             </button>
-            <Link
-              to="/applications"
-              className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 flex items-center justify-center gap-1.5 transition block"
-            >
-              <span>My Citizen Dossiers</span>
-            </Link>
           </div>
         </div>
       </div>

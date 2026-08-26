@@ -62,18 +62,24 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Parivahan Sarathi Production API Server active on http://localhost:${PORT}`);
-});
-
-// Graceful Shutdown
-const shutdown = async () => {
-  console.log('Shutting down server gracefully...');
-  await prisma.$disconnect();
-  server.close(() => {
-    process.exit(0);
+// Only listen when running standalone (not inside Vercel serverless function)
+if (!process.env.VERCEL) {
+  const server = app.listen(PORT, () => {
+    console.log(`🚀 Parivahan Sarathi Production API Server active on http://localhost:${PORT}`);
   });
-};
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+  // Graceful Shutdown
+  const shutdown = async () => {
+    console.log('Shutting down server gracefully...');
+    await prisma.$disconnect();
+    server.close(() => {
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
+
+export default app;
+export { app };

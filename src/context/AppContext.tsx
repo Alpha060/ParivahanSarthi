@@ -32,6 +32,8 @@ export interface AuthUser {
   dtsCode?: string;
   counterNo?: string;
   badgeNo?: string;
+  isDigiLockerVerified?: boolean;
+  digiLockerData?: any;
 }
 
 interface AppContextType {

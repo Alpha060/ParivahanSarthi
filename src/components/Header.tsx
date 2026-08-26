@@ -559,6 +559,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenLogin, onOpenHome }) => {
                         onClick={() => {
                           setIsProfileOpen(false);
                           logout();
+                          navigate('/', { replace: true });
                         }}
                         className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-left transition cursor-pointer"
                       >

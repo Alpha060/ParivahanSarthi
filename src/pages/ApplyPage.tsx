@@ -9,21 +9,38 @@ import {
   FileText, 
   MapPin, 
   Printer, 
-  Sparkles,
-  Calendar,
-  CreditCard,
-  Building,
-  Upload,
-  User,
-  AlertCircle,
-  Stethoscope,
-  Check,
-  RefreshCw
+  Sparkles, 
+  Calendar, 
+  CreditCard, 
+  Building, 
+  Upload, 
+  User, 
+  AlertCircle, 
+  Stethoscope, 
+  Check, 
+  RefreshCw,
+  FolderLock,
+  FileCheck2,
+  Trash2,
+  Eye,
+  FileUp
 } from 'lucide-react';
 import { QUICK_SERVICES } from '../data/mockData';
 import { api } from '../services/api';
 import { useApp } from '../context/AppContext';
 import { printOfficialSlip } from '../utils/printDocument';
+import { DigiLockerModal, DigiLockerFetchedData } from '../components/Modals/DigiLockerModal';
+
+export interface UploadedDoc {
+  id: string;
+  name: string;
+  category: string;
+  issuer: string;
+  size: string;
+  source: 'DIGILOCKER' | 'MANUAL_UPLOAD';
+  status: 'VERIFIED' | 'UPLOADED';
+  date: string;
+}
 
 export const ApplyPage: React.FC = () => {
   const { serviceId } = useParams<{ serviceId: string }>();
@@ -32,20 +49,46 @@ export const ApplyPage: React.FC = () => {
 
   const currentService = QUICK_SERVICES.find(s => s.id === serviceId) || QUICK_SERVICES[0];
 
-  // Wizard Step (1 to 4)
+  // 5-Stage Wizard Steps
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Form Fields
-  const [applicantName, setApplicantName] = useState('Krishna Mahto');
+  // DigiLocker Modal State
+  const userHasDigiLocker = !!user?.isDigiLockerVerified;
+  const [isDigiLockerOpen, setIsDigiLockerOpen] = useState(false);
+  const [isDigiLockerVerified, setIsDigiLockerVerified] = useState(userHasDigiLocker);
+
+  // Form Fields - Step 1: Applicant Demographics
+  const [applicantName, setApplicantName] = useState(user?.name || 'Krishna Mahto');
   const [fatherName, setFatherName] = useState('Rajendra Mahto');
   const [dob, setDob] = useState('1998-07-15');
   const [gender, setGender] = useState('Male');
-  const [mobile, setMobile] = useState('9876543210');
-  const [email, setEmail] = useState('krishna.mahto@citizen.in');
+  const [mobile, setMobile] = useState(user?.mobile || '9876543210');
+  const [email, setEmail] = useState(user?.email || 'krishna.mahto@citizen.in');
   const [bloodGroup, setBloodGroup] = useState('B+');
   const [aadhaarNo, setAadhaarNo] = useState('XXXX-XXXX-8921');
 
-  // Address
+  // Auto-fill from user DigiLocker profile if already connected during login
+  React.useEffect(() => {
+    if (user?.isDigiLockerVerified) {
+      setIsDigiLockerVerified(true);
+      if (user.name) setApplicantName(user.name);
+      if (user.mobile) setMobile(user.mobile);
+      if (user.digiLockerData) {
+        const d = user.digiLockerData;
+        if (d.fatherName) setFatherName(d.fatherName);
+        if (d.dob) setDob(d.dob);
+        if (d.gender) setGender(d.gender);
+        if (d.email) setEmail(d.email);
+        if (d.bloodGroup) setBloodGroup(d.bloodGroup);
+        if (d.aadhaarNumber) setAadhaarNo(d.aadhaarNumber);
+        if (d.address) setAddress(d.address);
+        if (d.city) setCity(d.city);
+        if (d.pincode) setPincode(d.pincode);
+      }
+    }
+  }, [user]);
+
+  // Step 2: Address & Jurisdiction
   const [address, setAddress] = useState('H.No 42, Kanke Road, Near CMPDI');
   const [city, setCity] = useState('Ranchi');
   const [pincode, setPincode] = useState('834008');
@@ -63,33 +106,119 @@ export const ApplyPage: React.FC = () => {
     else setSelectedRto('JH-01');
   }, [currentState]);
 
-  // Vehicle Class & Medical
+  // Step 3: Vehicle Class & Medical
   const [vehicleClass, setVehicleClass] = useState('LMV (Light Motor Vehicle)');
   const [hasMedicalFitness, setHasMedicalFitness] = useState(true);
   const [isOrganDonor, setIsOrganDonor] = useState(true);
+
+  // Step 4: Documents Upload & DigiLocker Registry
+  const [documents, setDocuments] = useState<UploadedDoc[]>([
+    {
+      id: 'DOC-01',
+      name: 'Aadhaar Card (UIDAI e-KYC)',
+      category: 'Proof of Identity & Address',
+      issuer: 'UIDAI',
+      size: '412 KB',
+      source: 'DIGILOCKER',
+      status: 'VERIFIED',
+      date: 'Auto-Verified'
+    },
+    {
+      id: 'DOC-02',
+      name: 'Class 10 Matriculation Marksheet',
+      category: 'Proof of Age / Date of Birth',
+      issuer: 'CBSE Board',
+      size: '628 KB',
+      source: 'DIGILOCKER',
+      status: 'VERIFIED',
+      date: 'Auto-Verified'
+    }
+  ]);
+
+  const [manualDocCategory, setManualDocCategory] = useState('Proof of Age (10th/Birth Certificate)');
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Step 5: Statutory Declarations & Payment Choice
+  const [legalConsentChecked, setLegalConsentChecked] = useState(true);
+  const [digitalSignChecked, setDigitalSignChecked] = useState(true);
+  const [paymentChoice, setPaymentChoice] = useState<'PAY_NOW' | 'PAY_LATER'>('PAY_NOW');
+  const [selectedGateway, setSelectedGateway] = useState<'UPI' | 'NET_BANKING' | 'DEBIT_CARD'>('UPI');
 
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedApp, setSubmittedApp] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleDigiLockerAutofill = () => {
-    setApplicantName(user?.name || 'Krishna Mahto');
-    setFatherName('Late Shri Ramesh Mahto');
-    setDob('1995-08-15');
-    setGender('Male');
-    setMobile(user?.mobile || '9876543210');
-    setBloodGroup('O+');
-    setAddress('Flat 4B, Shivalik Residency, Morabadi');
-    setCity('Ranchi');
-    setPincode('834008');
-    setSelectedRto('JH-01');
+  // Handle successful DigiLocker pull
+  const handleDigiLockerSuccess = (data: DigiLockerFetchedData) => {
+    setApplicantName(data.applicantName);
+    setFatherName(data.fatherName);
+    setDob(data.dob);
+    setGender(data.gender);
+    setMobile(data.mobile);
+    setEmail(data.email);
+    setBloodGroup(data.bloodGroup);
+    setAadhaarNo(data.aadhaarNumber);
+    setAddress(data.address);
+    setCity(data.city);
+    setPincode(data.pincode);
+    setIsDigiLockerVerified(true);
+
+    const digiDocs: UploadedDoc[] = data.documents.map((d, index) => ({
+      id: `DIGI-DOC-${Date.now()}-${index}`,
+      name: d.name,
+      category: d.docType,
+      issuer: d.issuer,
+      size: '512 KB',
+      source: 'DIGILOCKER',
+      status: 'VERIFIED',
+      date: 'DigiLocker e-Signed'
+    }));
+
+    setDocuments(digiDocs);
+  };
+
+  const handleManualUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setTimeout(() => {
+      const newDoc: UploadedDoc = {
+        id: `MANUAL-${Date.now()}`,
+        name: file.name,
+        category: manualDocCategory,
+        issuer: 'Self-Attested Citizen Upload',
+        size: `${(file.size / 1024).toFixed(1)} KB`,
+        source: 'MANUAL_UPLOAD',
+        status: 'UPLOADED',
+        date: new Date().toLocaleDateString('en-GB')
+      };
+      setDocuments(prev => [...prev, newDoc]);
+      setIsUploading(false);
+      e.target.value = '';
+    }, 600);
+  };
+
+  const handleDeleteDoc = (id: string) => {
+    setDocuments(prev => prev.filter(d => d.id !== id));
   };
 
   const handleSubmitApplication = async () => {
+    if (!legalConsentChecked || !digitalSignChecked) {
+      setErrorMsg('Please accept the statutory CMVR 1989 Rule 14 declaration and digital signature consent.');
+      return;
+    }
+
+    if (documents.length === 0) {
+      setErrorMsg('Please attach at least one mandatory identity or age proof document (via DigiLocker or Upload).');
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg(null);
     try {
+      const isPaidNow = paymentChoice === 'PAY_NOW' || currentService.fee === 0;
       const res = await api.submitApplication({
         type: currentService.title,
         subType: currentService.subtitle,
@@ -98,7 +227,9 @@ export const ApplyPage: React.FC = () => {
         mobile,
         state: currentState.split(',')[1]?.trim() || 'Jharkhand',
         rtoCode: selectedRto,
-        rtoName: `District Transport Office (${selectedRto})`
+        rtoName: `District Transport Office (${selectedRto})`,
+        feeAmount: currentService.fee,
+        paymentStatus: isPaidNow ? 'PAID' : 'PENDING'
       });
 
       if (res.success && res.application) {
@@ -123,30 +254,29 @@ export const ApplyPage: React.FC = () => {
         <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400 mb-6">
           <Link to="/" className="hover:text-[#0056D2] font-semibold">Home</Link>
           <span>/</span>
-          <span>Services</span>
+          <Link to="/services" className="hover:text-[#0056D2] font-semibold">Services Catalog</Link>
           <span>/</span>
           <span className="text-[#0056D2] font-bold">{currentService.title}</span>
         </div>
 
-        {/* Header Title Card */}
+        {/* Executive Header Card */}
         <div className={`rounded-3xl p-6 sm:p-8 border shadow-md mb-8 ${
           darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200/90'
         }`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center space-x-4">
-              <div 
-                className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-xs flex-shrink-0"
-                style={{ backgroundColor: currentService.bgCircleColor }}
-              >
-                <FileCheck className="w-7 h-7" style={{ color: currentService.iconColor }} />
+            <div className="flex items-start sm:items-center space-x-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950 text-[#0056D2] dark:text-blue-400 flex items-center justify-center flex-shrink-0">
+                <FileCheck className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                  MoRTH e-Services Portal (Form 2 / Form 4)
-                </span>
-                <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-snug">
-                  {currentService.title}
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-snug">
+                    {currentService.title}
+                  </h1>
+                  <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-[#0056D2] dark:text-blue-400 px-2 py-0.5 rounded-full uppercase">
+                    FORM 2
+                  </span>
+                </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {currentService.description}
                 </p>
@@ -160,18 +290,19 @@ export const ApplyPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 4-Stage Step Indicator */}
+          {/* 5-Stage Step Indicator */}
           {!submittedApp && (
-            <div className="grid grid-cols-4 gap-2 pt-6 mt-6 border-t border-slate-150 dark:border-slate-700">
+            <div className="grid grid-cols-5 gap-1.5 sm:gap-2 pt-6 mt-6 border-t border-slate-150 dark:border-slate-700">
               {[
                 { num: 1, label: '1. Applicant e-KYC' },
                 { num: 2, label: '2. Address & RTO' },
                 { num: 3, label: '3. Vehicle Class' },
-                { num: 4, label: '4. Review & Submit' }
+                { num: 4, label: '4. Doc Upload' },
+                { num: 5, label: '5. Review & Submit' }
               ].map((s) => (
                 <div 
                   key={s.num}
-                  className={`text-center py-2 px-1 rounded-xl border text-xs font-bold transition-all ${
+                  className={`text-center py-2 px-1 rounded-xl border text-[11px] font-bold transition-all ${
                     currentStep === s.num
                       ? 'bg-[#0056D2] text-white border-[#0056D2] shadow-sm'
                       : currentStep > s.num
@@ -179,8 +310,8 @@ export const ApplyPage: React.FC = () => {
                       : 'bg-slate-100 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
                   }`}
                 >
-                  <span className="hidden sm:inline">{s.label}</span>
-                  <span className="sm:hidden">Step {s.num}</span>
+                  <span className="hidden md:inline">{s.label}</span>
+                  <span className="md:hidden">Step {s.num}</span>
                 </div>
               ))}
             </div>
@@ -205,25 +336,43 @@ export const ApplyPage: React.FC = () => {
               
               {/* Executive Cryptographic Verification Seal */}
               <div className="relative inline-flex items-center justify-center mx-auto">
-                <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-blue-600 p-0.5 shadow-xl shadow-emerald-500/20">
-                  <div className="w-full h-full rounded-[22px] bg-slate-900 flex items-center justify-center border border-emerald-400/30">
-                    <ShieldCheck className="w-10 h-10 text-emerald-400" />
+                <div className={`w-20 h-20 rounded-3xl p-0.5 shadow-xl ${
+                  submittedApp.paymentStatus === 'PENDING'
+                    ? 'bg-gradient-to-tr from-amber-600 via-orange-600 to-yellow-600 shadow-amber-500/20'
+                    : 'bg-gradient-to-tr from-emerald-600 via-teal-600 to-blue-600 shadow-emerald-500/20'
+                }`}>
+                  <div className="w-full h-full rounded-[22px] bg-slate-900 flex items-center justify-center border border-slate-700">
+                    {submittedApp.paymentStatus === 'PENDING' ? (
+                      <CreditCard className="w-10 h-10 text-amber-400" />
+                    ) : (
+                      <ShieldCheck className="w-10 h-10 text-emerald-400" />
+                    )}
                   </div>
                 </div>
-                <span className="absolute -bottom-2 px-3 py-0.5 rounded-full bg-emerald-500 text-white font-black text-[9px] uppercase tracking-widest shadow-md">
-                  DIGITALLY SEALED
+                <span className={`absolute -bottom-2 px-3 py-0.5 rounded-full text-white font-black text-[9px] uppercase tracking-widest shadow-md ${
+                  submittedApp.paymentStatus === 'PENDING' ? 'bg-amber-500' : 'bg-emerald-500'
+                }`}>
+                  {submittedApp.paymentStatus === 'PENDING' ? 'DRAFT STORED' : 'DIGITALLY SEALED'}
                 </span>
               </div>
 
               <div>
-                <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
-                  MoRTH National Transport Register • Official Filing
+                <span className={`text-[11px] font-black uppercase tracking-widest ${
+                  submittedApp.paymentStatus === 'PENDING' ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
+                }`}>
+                  {submittedApp.paymentStatus === 'PENDING' 
+                    ? 'Citizen Draft Dossier • Statutory Fee Pending' 
+                    : 'MoRTH National Transport Register • Official Filing'}
                 </span>
                 <h2 className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-                  Application Registered & Dossier Synchronized
+                  {submittedApp.paymentStatus === 'PENDING'
+                    ? 'Application Saved in Draft Dossier'
+                    : 'Application Registered & Submitted to RTO'}
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-                  Statutory record verified under Central Motor Vehicles Rules (CMVR) 1989.
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
+                  {submittedApp.paymentStatus === 'PENDING'
+                    ? 'Your application details and documents have been securely saved. Note: This application is held as draft and is NOT yet transmitted to RTO officers for scrutiny until statutory fee is settled.'
+                    : 'Statutory record verified under Central Motor Vehicles Rules (CMVR) 1989. Transmitted to RTO Scrutiny Queue.'}
                 </p>
               </div>
 
@@ -234,8 +383,12 @@ export const ApplyPage: React.FC = () => {
                     <span className="text-[10px] text-slate-400 uppercase font-bold">Sarathi Application Number</span>
                     <p className="text-lg font-black text-[#0056D2] dark:text-blue-400">{submittedApp.applicationId}</p>
                   </div>
-                  <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 rounded-full text-xs font-bold border border-emerald-300 dark:border-emerald-800">
-                    STAGE 1: SCRUTINY QUEUE
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                    submittedApp.paymentStatus === 'PENDING'
+                      ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                      : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                  }`}>
+                    {submittedApp.paymentStatus === 'PENDING' ? 'DRAFT: PAYMENT PENDING' : 'STAGE 1: SCRUTINY QUEUE'}
                   </span>
                 </div>
 
@@ -249,85 +402,98 @@ export const ApplyPage: React.FC = () => {
                     <p className="font-bold text-slate-800 dark:text-slate-200">{submittedApp.mobile}</p>
                   </div>
                   <div>
-                    <span className="text-slate-400">Applied Service:</span>
-                    <p className="font-bold text-slate-800 dark:text-slate-200">{submittedApp.type}</p>
+                    <span className="text-slate-400">Assigned RTO Authority:</span>
+                    <p className="font-bold text-slate-800 dark:text-slate-200">{submittedApp.rtoName || 'Ranchi RTO (JH-01)'}</p>
                   </div>
                   <div>
-                    <span className="text-slate-400">Vehicle Category:</span>
-                    <p className="font-bold text-slate-800 dark:text-slate-200">{submittedApp.vehicleClass}</p>
+                    <span className="text-slate-400">COV Endorsement:</span>
+                    <p className="font-bold text-slate-800 dark:text-slate-200">{vehicleClass}</p>
                   </div>
                   <div>
-                    <span className="text-slate-400">Assigned RTO:</span>
-                    <p className="font-bold text-emerald-600">{submittedApp.rtoName}</p>
+                    <span className="text-slate-400">Attached Documents:</span>
+                    <p className="font-bold text-emerald-600 dark:text-emerald-400">{documents.length} Verified Documents</p>
                   </div>
                   <div>
-                    <span className="text-slate-400">Filing Date & Time:</span>
-                    <p className="font-bold text-slate-800 dark:text-slate-200">{new Date().toLocaleDateString()}</p>
+                    <span className="text-slate-400">Statutory Fee:</span>
+                    <p className={`font-bold ${submittedApp.paymentStatus === 'PENDING' ? 'text-amber-600 dark:text-amber-400' : 'text-slate-800 dark:text-slate-200'}`}>
+                      ₹{currentService.fee} ({submittedApp.paymentStatus === 'PENDING' ? 'Unpaid - Due Later' : 'Online Challan Settled'})
+                    </p>
                   </div>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => printOfficialSlip({
-                    title: 'Form 2 / Form 4 e-Application Acknowledgement',
-                    subtitle: 'MoRTH National Transport Register Record',
-                    documentType: 'Official e-Filing Slip',
+                    title: 'Ministry of Road Transport & Highways',
+                    subtitle: 'Government of India • Parivahan Sarathi National Portal',
+                    documentType: `FORM 2 - APPLICATION ACKNOWLEDGEMENT SLIP (${currentService.title.toUpperCase()})`,
                     referenceNumber: submittedApp.applicationId,
                     applicantName: submittedApp.applicantName,
-                    serviceName: submittedApp.type,
-                    rtoName: submittedApp.rtoName,
+                    mobile: submittedApp.mobile,
+                    serviceName: currentService.title,
+                    rtoName: submittedApp.rtoName || 'Ranchi RTO (JH-01)',
                     details: [
-                      { label: 'Sarathi Application Number', value: submittedApp.applicationId },
-                      { label: 'Applicant Full Name', value: submittedApp.applicantName },
-                      { label: 'Registered Mobile', value: submittedApp.mobile },
-                      { label: 'Applied Service', value: submittedApp.type },
-                      { label: 'Vehicle Category (COV)', value: submittedApp.vehicleClass },
-                      { label: 'Jurisdictional RTO Office', value: submittedApp.rtoName },
-                      { label: 'Current Processing State', value: 'IN PROGRESS (Step 1 of 9)' },
-                      { label: 'CMVR Fee Assessment', value: `₹${currentService.fee}` }
+                      { label: 'Application ID', value: submittedApp.applicationId },
+                      { label: 'Applicant Name', value: submittedApp.applicantName },
+                      { label: 'Father Name', value: fatherName },
+                      { label: 'Date of Birth', value: dob },
+                      { label: 'Mobile Number', value: submittedApp.mobile },
+                      { label: 'Assigned RTO', value: submittedApp.rtoName || 'Ranchi RTO (JH-01)' },
+                      { label: 'Endorsement Class', value: vehicleClass },
+                      { label: 'Attached Documents', value: `${documents.length} Verified Records` },
+                      { label: 'Statutory Fee', value: `INR ${currentService.fee}` },
+                      { label: 'Payment Status', value: submittedApp.paymentStatus === 'PENDING' ? 'PENDING (DRAFT)' : 'PAID (RECONCILED)' }
                     ],
                     highlightBox: {
-                      label: 'Assigned Application Number',
-                      value: submittedApp.applicationId
-                    },
-                    footerNotes: [
-                      'Your application is registered in the Sarathi National Database.',
-                      'Please preserve this Form 2 / Form 4 slip for RTO biometrics and driving skill track slot.',
-                      'You can track live 9-step progression at: http://localhost:5173/status?appId=' + submittedApp.applicationId
-                    ]
+                      label: 'Current Status',
+                      value: submittedApp.paymentStatus === 'PENDING' ? 'DRAFT: PAYMENT PENDING (NOT SUBMITTED TO RTO)' : 'STAGE 1: SCRUTINY QUEUE (SUBMITTED)'
+                    }
                   })}
                   className="px-5 py-3 rounded-2xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-2 cursor-pointer shadow-xs border border-slate-200 dark:border-slate-600"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Print Form 2 Slip</span>
+                  <span>Print Acknowledgement Slip</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => navigate(`/status?appId=${submittedApp.applicationId}`)}
-                  className="px-5 py-3 rounded-2xl bg-[#0056D2] hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>Track 9-Step Timeline</span>
-                </button>
+                {submittedApp.paymentStatus === 'PENDING' ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/applications')}
+                    className="px-6 py-3 rounded-2xl bg-[#0056D2] hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md"
+                  >
+                    <span>View in My Applications (Pay Later)</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/status?appId=${submittedApp.applicationId}`)}
+                      className="px-5 py-3 rounded-2xl bg-[#0056D2] hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>Track 9-Step Timeline</span>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => navigate('/appointments')}
-                  className="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md"
-                >
-                  <Calendar className="w-4 h-4" />
-                  <span>Book Driving Test Slot</span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/appointments')}
+                      className="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md"
+                    >
+                      <Calendar className="w-4 h-4" />
+                      <span>Book Driving Test Slot</span>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ) : (
             <div>
               
-              {/* STEP 1: Applicant Details */}
+              {/* STEP 1: Applicant Details & DigiLocker e-KYC */}
               {currentStep === 1 && (
                 <div className="space-y-5">
                   <div className="flex items-center space-x-2 pb-2 border-b dark:border-slate-700">
@@ -335,31 +501,62 @@ export const ApplyPage: React.FC = () => {
                     <h3 className="text-sm font-bold">Step 1: Aadhaar e-KYC & Personal Particulars</h3>
                   </div>
 
-                  {/* 1-Click DigiLocker e-KYC Auto-Fill Banner */}
-                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-blue-950/40 dark:to-slate-900 border border-blue-200 dark:border-blue-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-xl bg-[#0056D2] text-white flex items-center justify-center font-black flex-shrink-0 shadow-xs">
-                        <Sparkles className="w-5 h-5 text-amber-300" />
+                  {/* DigiLocker e-KYC Status & Action Banner */}
+                  {isDigiLockerVerified ? (
+                    <div className="p-3.5 rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 flex items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black flex-shrink-0 shadow-xs">
+                          <ShieldCheck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
+                              DigiLocker e-KYC Verified & Pre-Populated
+                            </p>
+                            <span className="text-[9px] font-black bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              AUTHENTICATED
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                            Your demographic particulars and verified statutory documents are securely linked from your authenticated login session.
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-900 dark:text-white">
-                          DigiLocker & UIDAI Instant e-KYC
-                        </p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                          Auto-populate verified Name, Father Name, DOB & Address from official registry.
-                        </p>
-                      </div>
+                      <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 hidden sm:inline flex-shrink-0">
+                        UIDAI Verified ✓
+                      </span>
                     </div>
+                  ) : (
+                    <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-blue-950/40 dark:to-slate-900 border border-blue-300 dark:border-blue-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black flex-shrink-0 shadow-xs">
+                          <ShieldCheck className="w-6 h-6 text-amber-300" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-bold text-slate-900 dark:text-white">
+                              Mandatory DigiLocker & UIDAI e-KYC Verification
+                            </p>
+                            <span className="text-[9px] font-extrabold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              REQUIRED
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                            MoRTH guidelines mandate Aadhaar e-KYC authentication to file applications without physical counter visits.
+                          </p>
+                        </div>
+                      </div>
 
-                    <button
-                      type="button"
-                      onClick={handleDigiLockerAutofill}
-                      className="px-4 py-2 rounded-xl bg-[#0056D2] hover:bg-blue-700 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer flex-shrink-0"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>1-Click Auto-Fill via DigiLocker</span>
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsDigiLockerOpen(true)}
+                        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition cursor-pointer flex-shrink-0"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>Verify via DigiLocker (Mandatory)</span>
+                      </button>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -463,6 +660,10 @@ export const ApplyPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
+                        if (!isDigiLockerVerified) {
+                          setIsDigiLockerOpen(true);
+                          return;
+                        }
                         if (mobile.replace(/\D/g, '').length !== 10) {
                           alert('Please enter a valid 10-digit mobile number.');
                           return;
@@ -598,127 +799,59 @@ export const ApplyPage: React.FC = () => {
                           { id: 'MCWG (Motorcycle with Gear)', title: 'MCWG (Motorcycle with Gear)', desc: 'Two wheeler with manual/auto gears' },
                           { id: 'MCWOG (Without Gear)', title: 'MCWOG (Scooter / Electric)', desc: 'Two wheeler gearless (e.g. Activa)' },
                           { id: 'BOTH (MCWG + LMV)', title: 'BOTH (2-Wheeler + Car)', desc: 'Dual endorsement package' }
-                        ].map((v) => (
+                        ].map((cov) => (
                           <div
-                            key={v.id}
-                            onClick={() => setVehicleClass(v.id)}
-                            className={`p-4 rounded-2xl border cursor-pointer transition ${
-                              vehicleClass === v.id
-                                ? 'bg-blue-50 dark:bg-blue-950 border-[#0056D2] text-[#0056D2] shadow-xs'
-                                : 'bg-white dark:bg-slate-900 border-slate-250 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:border-blue-300'
+                            key={cov.id}
+                            onClick={() => setVehicleClass(cov.id)}
+                            className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                              vehicleClass === cov.id
+                                ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-600 dark:border-blue-400 ring-2 ring-blue-100 dark:ring-blue-900/50'
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300'
                             }`}
                           >
-                            <p className="text-xs font-extrabold">{v.title}</p>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{v.desc}</p>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white">{cov.title}</span>
+                              {vehicleClass === cov.id && <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
+                            </div>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">{cov.desc}</p>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    {/* AI Document Pre-Inspector & Auto-Optimizer */}
                     <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <Sparkles className="w-4 h-4 text-[#0056D2]" />
-                          <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                            AI Document Pre-Inspector & Auto-Compressor
-                          </h4>
-                        </div>
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                          0% RTO REJECTION GUARANTEED
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold">Aadhaar Card (PDF / Scan)</span>
-                            <span className="text-[10px] font-mono text-emerald-600 font-bold">OCR: 99.8%</span>
-                          </div>
-                          <p className="text-[11px] text-slate-400">
-                            Original: 3.4 MB $\rightarrow$ <strong className="text-emerald-600">Compressed: 42.8 KB</strong> (CMVR Rule 14 Compliant)
+                      <div className="flex items-start space-x-3">
+                        <Stethoscope className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 dark:text-white">
+                            Form 1 Physical Fitness Declaration (CMVR 1989)
                           </p>
-                          <div className="w-full bg-slate-100 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                            <div className="bg-emerald-500 h-full w-full" />
-                          </div>
-                        </div>
-
-                        <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold">Applicant Passport Photo</span>
-                            <span className="text-[10px] font-mono text-emerald-600 font-bold">Face Clarity: 100%</span>
-                          </div>
-                          <p className="text-[11px] text-slate-400">
-                            Original: 1.8 MB $\rightarrow$ <strong className="text-emerald-600">Compressed: 24.2 KB</strong> (ICAO Biometric Standard)
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                            I declare that I do not suffer from epilepsy, night blindness, sudden loss of consciousness, or color vision deficiency.
                           </p>
-                          <div className="w-full bg-slate-100 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                            <div className="bg-emerald-500 h-full w-full" />
-                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Tele-Medical Form 1A Certified Doctor Bridge */}
-                    <div className="p-4 rounded-2xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/60 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <Stethoscope className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                          <h4 className="text-xs font-black uppercase tracking-wider text-teal-900 dark:text-teal-200">
-                            Form 1A Tele-Doctor Digital Booking Bridge
-                          </h4>
-                        </div>
-                        <span className="text-[10px] font-bold text-teal-700 dark:text-teal-300">
-                          MV Act Section 8(3)
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-teal-800/80 dark:text-teal-300">
-                        Applicants aged 40+ or commercial vehicle applicants require a digitally signed Form 1A Medical Fitness Certificate.
-                      </p>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-teal-200 dark:border-teal-700 flex items-center justify-between">
-                          <div>
-                            <p className="font-extrabold text-slate-900 dark:text-white">Dr. Priya Sharma, MBBS MD</p>
-                            <p className="text-[10px] text-slate-400">Reg: NMC #84920 • Ranchi Civil Hospital</p>
-                          </div>
-                          <span className="px-2 py-0.5 rounded-md bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 text-[10px] font-bold">
-                            Available Now
-                          </span>
-                        </div>
-
-                        <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-teal-200 dark:border-teal-700 flex items-center justify-between">
-                          <div>
-                            <p className="font-extrabold text-slate-900 dark:text-white">Dr. A. K. Sengupta, MBBS MD</p>
-                            <p className="text-[10px] text-slate-400">Reg: NMC #72109 • AIIMS Tele-Clinic</p>
-                          </div>
-                          <span className="px-2 py-0.5 rounded-md bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 text-[10px] font-bold">
-                            Available Now
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl space-y-2 border border-slate-200 dark:border-slate-700">
-                      <label className="flex items-center space-x-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer">
+                      <label className="flex items-center space-x-2 text-xs font-bold cursor-pointer select-none">
                         <input
                           type="checkbox"
                           checked={hasMedicalFitness}
                           onChange={(e) => setHasMedicalFitness(e.target.checked)}
-                          className="w-4 h-4 rounded text-blue-600"
+                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
                         />
-                        <span>I declare that I am medically fit to drive under Form 1 (Self Declaration).</span>
-                      </label>
-
-                      <label className="flex items-center space-x-2.5 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={isOrganDonor}
-                          onChange={(e) => setIsOrganDonor(e.target.checked)}
-                          className="w-4 h-4 rounded text-blue-600"
-                        />
-                        <span>In case of accidental death, I wish to donate my organs (Optional).</span>
+                        <span>I confirm my physical & medical fitness under Rule 5(2)</span>
                       </label>
                     </div>
+
+                    <label className="flex items-center space-x-2 text-xs font-bold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={isOrganDonor}
+                        onChange={(e) => setIsOrganDonor(e.target.checked)}
+                        className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500"
+                      />
+                      <span>Pledge as an Organ Donor in case of accidental demise (Printed on DL)</span>
+                    </label>
                   </div>
 
                   <div className="flex justify-between pt-4">
@@ -733,57 +866,166 @@ export const ApplyPage: React.FC = () => {
 
                     <button
                       type="button"
-                      onClick={() => setCurrentStep(4)}
+                      onClick={() => {
+                        if (!hasMedicalFitness) {
+                          alert('Please confirm your medical fitness declaration.');
+                          return;
+                        }
+                        setCurrentStep(4);
+                      }}
                       className="bg-[#0056D2] hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md"
                     >
-                      <span>Proceed to Final Review</span>
+                      <span>Proceed to Document Upload</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* STEP 4: Review & Final Submission */}
+              {/* STEP 4: Mandatory Document Upload & DigiLocker Verification */}
               {currentStep === 4 && (
                 <div className="space-y-5">
-                  <div className="flex items-center space-x-2 pb-2 border-b dark:border-slate-700">
-                    <FileText className="w-4 h-4 text-blue-600" />
-                    <h3 className="text-sm font-bold">Step 4: Application Dossier Summary & Final Submission</h3>
+                  <div className="flex items-center justify-between pb-2 border-b dark:border-slate-700">
+                    <div className="flex items-center space-x-2">
+                      <FolderLock className="w-4 h-4 text-blue-600" />
+                      <h3 className="text-sm font-bold">Step 4: Statutory Document Verification & Upload</h3>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400">
+                      CMVR 1989 Rule 14 Mandatory Proofs
+                    </span>
                   </div>
 
-                  {/* Summary Card */}
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-3 text-xs">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      <div>
-                        <span className="text-slate-400">Applicant:</span>
-                        <p className="font-bold text-slate-800 dark:text-slate-200">{applicantName}</p>
+                  {/* Option 1: 1-Click DigiLocker Cloud Pull */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 dark:from-slate-900 dark:via-blue-950/40 dark:to-slate-900 border border-blue-200 dark:border-blue-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                        <FileCheck2 className="w-6 h-6" />
                       </div>
                       <div>
-                        <span className="text-slate-400">Father's Name:</span>
-                        <p className="font-bold text-slate-800 dark:text-slate-200">{fatherName}</p>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                          DigiLocker Instant Document Synchronization
+                        </h4>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                          Automatically import cryptographically signed Aadhaar, 10th Certificate & Address Proof.
+                        </p>
                       </div>
-                      <div>
-                        <span className="text-slate-400">DOB & Blood Group:</span>
-                        <p className="font-bold text-slate-800 dark:text-slate-200">{dob} ({bloodGroup})</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsDigiLockerOpen(true)}
+                      className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer flex-shrink-0"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{isDigiLockerVerified ? 'Re-Sync DigiLocker' : 'Fetch from DigiLocker'}</span>
+                    </button>
+                  </div>
+
+                  {/* Option 2: Manual Document Upload Form */}
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-3">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <FileUp className="w-4 h-4 text-slate-500" />
+                      <span>Manual Document Upload (PDF / JPG / PNG max 5MB)</span>
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                      <div className="sm:col-span-6">
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">
+                          Document Category *
+                        </label>
+                        <select
+                          value={manualDocCategory}
+                          onChange={(e) => setManualDocCategory(e.target.value)}
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold"
+                        >
+                          <option>Proof of Age (10th/Birth Certificate)</option>
+                          <option>Proof of Present Address (Aadhaar/Utility)</option>
+                          <option>Form 1 Self-Declaration (Signed)</option>
+                          <option>Passport Size Photograph</option>
+                          <option>Applicant Digital Signature</option>
+                        </select>
                       </div>
-                      <div>
-                        <span className="text-slate-400">Mobile:</span>
-                        <p className="font-bold text-slate-800 dark:text-slate-200">{mobile}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Vehicle Class:</span>
-                        <p className="font-bold text-blue-600">{vehicleClass}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">RTO Jurisdiction:</span>
-                        <p className="font-bold text-emerald-600">{selectedRto}</p>
+
+                      <div className="sm:col-span-6 flex items-end">
+                        <label className="w-full bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-dashed border-blue-400 text-blue-600 dark:text-blue-400 py-2 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition shadow-2xs">
+                          <Upload className="w-4 h-4" />
+                          <span>{isUploading ? 'Uploading File...' : 'Choose File to Attach'}</span>
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={handleManualUpload}
+                            className="hidden"
+                            disabled={isUploading}
+                          />
+                        </label>
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/40 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
-                    <p className="font-bold text-blue-800 dark:text-blue-300">National Register Digital Submission Declaration</p>
-                    <p>I hereby declare that all particulars furnished above are true to the best of my knowledge under the Motor Vehicles Act 1988.</p>
+                  {/* Attached Documents Manifest Table */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        Attached Documents Checklist ({documents.length})
+                      </h4>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                        {documents.filter(d => d.status === 'VERIFIED').length} DigiLocker Verified
+                      </span>
+                    </div>
+
+                    {documents.length === 0 ? (
+                      <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                        <FolderLock className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                        <p className="text-xs text-slate-500">No documents attached yet. Use DigiLocker or Upload above.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {documents.map((doc) => (
+                          <div
+                            key={doc.id}
+                            className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 shadow-2xs"
+                          >
+                            <div className="flex items-center space-x-3 min-w-0">
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                                doc.source === 'DIGILOCKER' 
+                                  ? 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400' 
+                                  : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400'
+                              }`}>
+                                <FileText className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                  {doc.name}
+                                </p>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  {doc.category} • {doc.size} • {doc.issuer}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-2 flex-shrink-0">
+                              <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
+                                doc.status === 'VERIFIED'
+                                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                                  : 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300'
+                              }`}>
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>{doc.status}</span>
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDoc(doc.id)}
+                                className="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 flex items-center justify-center transition cursor-pointer"
+                                title="Remove Document"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex justify-between pt-4">
@@ -798,12 +1040,245 @@ export const ApplyPage: React.FC = () => {
 
                     <button
                       type="button"
-                      disabled={isSubmitting}
-                      onClick={handleSubmitApplication}
-                      className="bg-[#0056D2] hover:bg-blue-700 text-white px-8 py-3 rounded-2xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-lg transition"
+                      onClick={() => {
+                        if (documents.length === 0) {
+                          alert('Please attach at least one proof document via DigiLocker or Manual Upload.');
+                          return;
+                        }
+                        setCurrentStep(5);
+                      }}
+                      className="bg-[#0056D2] hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-md"
                     >
-                      <Sparkles className="w-4 h-4" />
-                      <span>{isSubmitting ? 'Transmitting to National Database...' : 'Submit Application (Form 2)'}</span>
+                      <span>Proceed to Final Review</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 5: Final Review & Submission */}
+              {currentStep === 5 && (
+                <div className="space-y-5">
+                  <div className="flex items-center space-x-2 pb-2 border-b dark:border-slate-700">
+                    <FileCheck className="w-4 h-4 text-blue-600" />
+                    <h3 className="text-sm font-bold">Step 5: Statutory Review, Declaration & Submit</h3>
+                  </div>
+
+                  {/* Summary Dossier Grid */}
+                  <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-4 text-xs">
+                    <div className="flex items-center justify-between pb-3 border-b dark:border-slate-700">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">Requested Service</span>
+                        <p className="text-sm font-black text-[#0056D2] dark:text-blue-400">{currentService.title}</p>
+                      </div>
+                      <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                        Fee: ₹{currentService.fee}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-slate-400">Applicant Name:</span>
+                        <p className="font-bold text-slate-800 dark:text-slate-200">{applicantName}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Father's Name:</span>
+                        <p className="font-bold text-slate-800 dark:text-slate-200">{fatherName}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Date of Birth & Gender:</span>
+                        <p className="font-bold text-slate-800 dark:text-slate-200">{dob} ({gender})</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Registered Mobile:</span>
+                        <p className="font-bold text-slate-800 dark:text-slate-200">+91 {mobile}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Assigned Jurisdictional RTO:</span>
+                        <p className="font-bold text-slate-800 dark:text-slate-200">{selectedRto} ({city}, {currentState})</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Requested Vehicle Class:</span>
+                        <p className="font-bold text-slate-800 dark:text-slate-200">{vehicleClass}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Verified Attached Documents:</span>
+                        <p className="font-bold text-emerald-600 dark:text-emerald-400">{documents.length} Records Attached</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Organ Donation Pledge:</span>
+                        <p className="font-bold text-slate-800 dark:text-slate-200">{isOrganDonor ? 'Yes (Enrolled)' : 'No'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Statutory Fee & Payment Choice Section */}
+                  {currentService.fee > 0 && (
+                    <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-4">
+                      <div className="flex items-center justify-between border-b dark:border-slate-700 pb-2.5">
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-wider text-[#0056D2] dark:text-blue-400">
+                            CMVR 1989 Rule 32 Tariff
+                          </span>
+                          <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                            Statutory Fee Payment Preference
+                          </h4>
+                        </div>
+                        <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                          Total: ₹{currentService.fee}
+                        </span>
+                      </div>
+
+                      {/* Payment Choice Radio */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div
+                          onClick={() => setPaymentChoice('PAY_NOW')}
+                          className={`p-3.5 rounded-2xl border cursor-pointer transition flex flex-col justify-between ${
+                            paymentChoice === 'PAY_NOW'
+                              ? 'bg-blue-50 dark:bg-blue-950/60 border-[#0056D2] text-[#0056D2] shadow-xs'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black">Option 1: Pay Now</span>
+                            <span className="w-4 h-4 rounded-full border-2 flex items-center justify-center border-blue-600">
+                              {paymentChoice === 'PAY_NOW' && <span className="w-2 h-2 rounded-full bg-[#0056D2]" />}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+                            Pay ₹{currentService.fee} now via Bharat ePay / UPI. Application is <strong>instantly transmitted</strong> to the RTO Officer Scrutiny queue.
+                          </p>
+                          <span className="inline-block mt-2 text-[9px] font-black px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 self-start">
+                            RECOMMENDED (INSTANT RTO FILING)
+                          </span>
+                        </div>
+
+                        <div
+                          onClick={() => setPaymentChoice('PAY_LATER')}
+                          className={`p-3.5 rounded-2xl border cursor-pointer transition flex flex-col justify-between ${
+                            paymentChoice === 'PAY_LATER'
+                              ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-500 text-amber-900 dark:text-amber-200 shadow-xs'
+                              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black">Option 2: Pay Later (Save Draft)</span>
+                            <span className="w-4 h-4 rounded-full border-2 flex items-center justify-center border-amber-600">
+                              {paymentChoice === 'PAY_LATER' && <span className="w-2 h-2 rounded-full bg-amber-600" />}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+                            Save application as draft in your citizen dossier. <strong>Will NOT be visible to RTO officers</strong> until payment is settled.
+                          </p>
+                          <span className="inline-block mt-2 text-[9px] font-black px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 self-start">
+                            HOLD IN DRAFT
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Payment Gateway Mode when Pay Now is selected */}
+                      {paymentChoice === 'PAY_NOW' && (
+                        <div className="pt-2">
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Select Gateway Method
+                          </label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { id: 'UPI', label: 'BHIM / UPI / QR' },
+                              { id: 'NET_BANKING', label: 'Core Banking' },
+                              { id: 'DEBIT_CARD', label: 'RuPay / Card' }
+                            ].map(g => (
+                              <button
+                                key={g.id}
+                                type="button"
+                                onClick={() => setSelectedGateway(g.id as any)}
+                                className={`p-2 rounded-xl border text-[11px] font-bold transition cursor-pointer text-center ${
+                                  selectedGateway === g.id
+                                    ? 'bg-blue-100 dark:bg-blue-900 border-[#0056D2] text-[#0056D2] dark:text-blue-200'
+                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                                }`}
+                              >
+                                {g.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {paymentChoice === 'PAY_LATER' && (
+                        <div className="p-3 bg-amber-100/60 dark:bg-amber-950/40 rounded-xl text-xs text-amber-900 dark:text-amber-300 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                          <p className="text-[11px] leading-tight">
+                            Your application will be stored in <strong>My Applications</strong> with status <em>Draft (Payment Pending)</em>. You must complete payment to transmit it to RTO officers for scrutiny.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Statutory Declarations */}
+                  <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 space-y-3">
+                    <label className="flex items-start space-x-2.5 text-xs font-medium text-amber-950 dark:text-amber-200 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={legalConsentChecked}
+                        onChange={(e) => setLegalConsentChecked(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                      />
+                      <span>
+                        I declare that the information provided is true and correct under <strong>Section 182 of the Motor Vehicles Act 1988</strong>. I understand that furnishing false particulars is punishable by law.
+                      </span>
+                    </label>
+
+                    <label className="flex items-start space-x-2.5 text-xs font-medium text-amber-950 dark:text-amber-200 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={digitalSignChecked}
+                        onChange={(e) => setDigitalSignChecked(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                      />
+                      <span>
+                        I authorize MoRTH and jurisdictional RTO authorities to electronically verify my documents via DigiLocker / UIDAI databases.
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="flex justify-between pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(4)}
+                      className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer border border-slate-200 dark:border-slate-600"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      <span>Back</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSubmitting || !legalConsentChecked || !digitalSignChecked}
+                      onClick={handleSubmitApplication}
+                      className={`px-8 py-3 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-lg transition text-white ${
+                        paymentChoice === 'PAY_NOW' 
+                          ? 'bg-emerald-600 hover:bg-emerald-700' 
+                          : 'bg-amber-600 hover:bg-amber-700'
+                      }`}
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Filing with Sarathi Registry...</span>
+                        </>
+                      ) : paymentChoice === 'PAY_NOW' ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Pay ₹{currentService.fee} & Submit to RTO Scrutiny</span>
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="w-4 h-4" />
+                          <span>Save Draft & Pay Later</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -815,6 +1290,14 @@ export const ApplyPage: React.FC = () => {
         </div>
 
       </div>
+
+      {/* DigiLocker Official Verification Gateway Modal */}
+      <DigiLockerModal
+        isOpen={isDigiLockerOpen}
+        onClose={() => setIsDigiLockerOpen(false)}
+        onSuccess={handleDigiLockerSuccess}
+        darkMode={darkMode}
+      />
     </div>
   );
 };

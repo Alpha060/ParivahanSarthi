@@ -30,7 +30,6 @@ import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 import { MOCK_APPLICATIONS } from '../data/mockData';
 import { DigitalLicenceCard } from '../components/DigitalLicenceCard';
-import confetti from 'canvas-confetti';
 
 export const OfficerDashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -74,21 +73,33 @@ export const OfficerDashboardPage: React.FC = () => {
 
   const handleApproveApplication = async (app: any) => {
     setActionInProgress(true);
+    const appId = app.applicationId || app.id;
     try {
-      const res = await api.officerTakeAction(app.applicationId || app.id, 'APPROVE', {
+      // Optimistically update application status immediately
+      setApplications(prev => prev.map(a => {
+        if ((a.applicationId || a.id) === appId) {
+          return {
+            ...a,
+            status: 'APPROVED',
+            currentStep: 9,
+            currentStepName: 'Driving Licence Issued & Dispatched',
+            dlNumber: a.dlNumber || `JH01 2026${Math.floor(1000000 + Math.random() * 9000000)}`
+          };
+        }
+        return a;
+      }));
+
+      setNotification({
+        type: 'success',
+        message: `Application ${appId} Approved! Driving Licence generated and dispatched to Smart Card Queue.`
+      });
+
+      await api.officerTakeAction(appId, 'APPROVE', {
         remarks: 'Approved by Senior Licensing Officer (JH-01). High security DL authorized.',
         officerId: user?.id || 'OFFICER-JH01'
       });
 
-      if (res.success) {
-        confetti({ particleCount: 80, spread: 60 });
-        setNotification({
-          type: 'success',
-          message: `Application ${app.applicationId || app.id} Approved! Driving Licence generated.`
-        });
-        await fetchApplications();
-        setSelectedApp(null);
-      }
+      setSelectedApp(null);
     } catch (err) {
       setNotification({ type: 'error', message: 'Failed to process statutory approval.' });
     } finally {
@@ -99,20 +110,31 @@ export const OfficerDashboardPage: React.FC = () => {
 
   const handleAdvanceStep = async (app: any) => {
     setActionInProgress(true);
+    const appId = app.applicationId || app.id;
     try {
-      const res = await api.officerTakeAction(app.applicationId || app.id, 'ADVANCE_STEP', {
+      setApplications(prev => prev.map(a => {
+        if ((a.applicationId || a.id) === appId) {
+          const nextStep = Math.min(9, (a.currentStep || 1) + 1);
+          return {
+            ...a,
+            currentStep: nextStep,
+            status: nextStep >= 8 ? 'APPROVED' : a.status
+          };
+        }
+        return a;
+      }));
+
+      setNotification({
+        type: 'success',
+        message: `Application ${appId} advanced to next statutory milestone.`
+      });
+
+      await api.officerTakeAction(appId, 'ADVANCE_STEP', {
         remarks: officerRemarks || 'Document Scrutiny Verified. Biometrics cleared.',
         officerId: user?.id || 'OFFICER-JH01'
       });
 
-      if (res.success) {
-        setNotification({
-          type: 'success',
-          message: `Application ${app.applicationId || app.id} advanced to next statutory milestone.`
-        });
-        await fetchApplications();
-        setSelectedApp(null);
-      }
+      setSelectedApp(null);
     } catch (err) {
       setNotification({ type: 'error', message: 'Failed to advance application step.' });
     } finally {
@@ -123,22 +145,33 @@ export const OfficerDashboardPage: React.FC = () => {
 
   const handleDrivingTestPass = async (app: any) => {
     setActionInProgress(true);
+    const appId = app.applicationId || app.id;
     try {
-      const res = await api.officerTakeAction(app.applicationId || app.id, 'TEST_PASS', {
+      setApplications(prev => prev.map(a => {
+        if ((a.applicationId || a.id) === appId) {
+          return {
+            ...a,
+            status: 'APPROVED',
+            currentStep: 8,
+            currentStepName: 'DL Printing & Dispatch Queue',
+            testScore: testScore
+          };
+        }
+        return a;
+      }));
+
+      setNotification({
+        type: 'success',
+        message: `Candidate ${app.applicantName} marked PASSED (${testScore}). Form 7B endorsed!`
+      });
+
+      await api.officerTakeAction(appId, 'TEST_PASS', {
         testGrade: testScore,
         remarks: `ADTT Automated Driving Test passed successfully with ${testScore}.`,
         officerId: user?.id || 'OFFICER-JH01'
       });
 
-      if (res.success) {
-        confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
-        setNotification({
-          type: 'success',
-          message: `Candidate ${app.applicantName} marked PASSED (${testScore}). Form 7B endorsed!`
-        });
-        await fetchApplications();
-        setSelectedApp(null);
-      }
+      setSelectedApp(null);
     } catch (err) {
       setNotification({ type: 'error', message: 'Failed to record test clearance.' });
     } finally {
@@ -199,9 +232,18 @@ export const OfficerDashboardPage: React.FC = () => {
     return matchesQuery && matchesClass;
   });
 
-  const pendingScrutiny = filteredApplications.filter(a => a.status !== 'APPROVED' && a.status !== 'REJECTED');
+  const pendingScrutiny = filteredApplications.filter(a => 
+    a.status !== 'APPROVED' && 
+    a.status !== 'REJECTED' && 
+    a.status !== 'DRAFT_PAYMENT_PENDING' && 
+    a.paymentStatus !== 'PENDING'
+  );
   const approvedList = filteredApplications.filter(a => a.status === 'APPROVED');
-  const drivingTestQueue = filteredApplications.filter(a => (a.currentStep >= 5 && a.currentStep <= 7) || a.status === 'UPCOMING');
+  const drivingTestQueue = filteredApplications.filter(a => 
+    a.status !== 'DRAFT_PAYMENT_PENDING' && 
+    a.paymentStatus !== 'PENDING' && 
+    ((a.currentStep >= 5 && a.currentStep <= 7) || a.status === 'UPCOMING')
+  );
 
   return (
     <div className={`min-h-screen py-6 sm:py-8 transition-colors duration-200 ${

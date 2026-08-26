@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useApp } from '../context/AppContext';
+import { DigiLockerModal, DigiLockerFetchedData } from '../components/Modals/DigiLockerModal';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -30,7 +31,7 @@ export const LoginPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { darkMode, login } = useApp();
 
-  const getIntendedRedirect = (defaultFallback: string) => {
+  const getIntendedRedirect = (defaultFallback: string, userRole?: string) => {
     const fromState = (location.state as any)?.from;
     const fromPath = typeof fromState === 'string' 
       ? fromState 
@@ -39,9 +40,22 @@ export const LoginPage: React.FC = () => {
       : null;
     const redirectParam = searchParams.get('redirect') || searchParams.get('returnTo');
     const target = fromPath || redirectParam;
+    
     if (!target || target === '/' || target === '/login' || target === '%2F') {
       return defaultFallback;
     }
+
+    const isOfficial = userRole && userRole !== 'CITIZEN';
+    const isCitizenOnlyRoute = target.startsWith('/applications') || target.startsWith('/my-applications');
+    const isOfficerOnlyRoute = target.startsWith('/officer') || target.startsWith('/admin') || target.startsWith('/doctor') || target.startsWith('/dts') || target.startsWith('/counter') || target.startsWith('/enforcement');
+
+    if (isOfficial && isCitizenOnlyRoute) {
+      return defaultFallback;
+    }
+    if (!isOfficial && isOfficerOnlyRoute) {
+      return '/applications';
+    }
+
     return target;
   };
   
@@ -52,6 +66,25 @@ export const LoginPage: React.FC = () => {
   const [identifier, setIdentifier] = useState('9876543210');
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState('');
+  const [isDigiLockerOpen, setIsDigiLockerOpen] = useState(false);
+
+  const handleDigiLockerLoginSuccess = (data: DigiLockerFetchedData) => {
+    const citizenUser = {
+      id: 'USR-001',
+      name: data.applicantName || 'Krishna Mahto',
+      mobile: data.mobile || '9876543210',
+      role: 'CITIZEN',
+      state: data.state || 'Jharkhand',
+      isDigiLockerVerified: true,
+      digiLockerData: data
+    };
+    login(citizenUser);
+    setIsSuccess(true);
+    setTimeout(() => {
+      const target = getIntendedRedirect('/applications');
+      navigate(target, { replace: true });
+    }, 500);
+  };
   
   // Official Officer State
   const [officerUsername, setOfficerUsername] = useState('OFFICER-JH01');
@@ -275,7 +308,7 @@ export const LoginPage: React.FC = () => {
       setIsSuccess(true);
       
       setTimeout(() => {
-        const target = getIntendedRedirect(targetRoute);
+        const target = getIntendedRedirect(targetRoute, userObj.role);
         navigate(target, { replace: true });
       }, 500);
     } catch (err) {
@@ -569,35 +602,71 @@ export const LoginPage: React.FC = () => {
                 </label>
 
                 {loginType === 'mobile' ? (
-                  <div className="flex rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus-within:border-[#0056D2] focus-within:ring-2 focus-within:ring-blue-100 shadow-2xs">
-                    <span className="px-3.5 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold border-r border-slate-300 dark:border-slate-700 flex items-center gap-1.5 select-none">
-                      <span className="text-[10px] font-black bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-800 dark:text-slate-200">IND</span> +91
-                    </span>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={10}
-                      value={identifier}
-                      onChange={(e) => handleIdentifierChange(e.target.value)}
-                      placeholder="98765 43210"
-                      className="w-full px-3.5 py-3 bg-transparent text-slate-800 dark:text-slate-100 text-xs font-bold tracking-wider focus:outline-none"
-                      required
-                    />
+                  <div className="space-y-3">
+                    {/* 1-Click DigiLocker Cloud Fast Login */}
+                    <button
+                      type="button"
+                      onClick={() => setIsDigiLockerOpen(true)}
+                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                      <span>Instant Login via DigiLocker Cloud (1-Click)</span>
+                    </button>
+
+                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold justify-center uppercase">
+                      <span className="h-px bg-slate-200 dark:bg-slate-700 flex-1" />
+                      <span>Or Login via Mobile OTP</span>
+                      <span className="h-px bg-slate-200 dark:bg-slate-700 flex-1" />
+                    </div>
+
+                    <div className="flex rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 focus-within:border-[#0056D2] focus-within:ring-2 focus-within:ring-blue-100 shadow-2xs">
+                      <span className="px-3.5 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold border-r border-slate-300 dark:border-slate-700 flex items-center gap-1.5 select-none">
+                        <span className="text-[10px] font-black bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-800 dark:text-slate-200">IND</span> +91
+                      </span>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={10}
+                        value={identifier}
+                        onChange={(e) => handleIdentifierChange(e.target.value)}
+                        placeholder="98765 43210"
+                        className="w-full px-3.5 py-3 bg-transparent text-slate-800 dark:text-slate-100 text-xs font-bold tracking-wider focus:outline-none"
+                        required
+                      />
+                    </div>
                   </div>
                 ) : (
-                  <div className="relative">
-                    <ShieldCheck className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={14}
-                      value={identifier}
-                      onChange={(e) => handleIdentifierChange(e.target.value)}
-                      placeholder="XXXX-XXXX-XXXX"
-                      className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-mono font-bold tracking-wider focus:border-[#0056D2] focus:ring-2 focus:ring-blue-100"
-                      required
-                    />
+                  <div className="space-y-3">
+                    {/* DigiLocker Instant Authentication Action */}
+                    <button
+                      type="button"
+                      onClick={() => setIsDigiLockerOpen(true)}
+                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md transition cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                      <span>Authenticate via DigiLocker Cloud (1-Click)</span>
+                    </button>
+
+                    <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold justify-center uppercase">
+                      <span className="h-px bg-slate-200 dark:bg-slate-700 flex-1" />
+                      <span>Or Enter UIDAI Aadhaar No.</span>
+                      <span className="h-px bg-slate-200 dark:bg-slate-700 flex-1" />
+                    </div>
+
+                    <div className="relative">
+                      <ShieldCheck className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={14}
+                        value={identifier}
+                        onChange={(e) => handleIdentifierChange(e.target.value)}
+                        placeholder="XXXX-XXXX-XXXX"
+                        className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-mono font-bold tracking-wider focus:border-[#0056D2] focus:ring-2 focus:ring-blue-100"
+                        required
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -671,6 +740,14 @@ export const LoginPage: React.FC = () => {
         </div>
 
       </div>
+
+      {/* DigiLocker Official Verification Gateway Modal */}
+      <DigiLockerModal
+        isOpen={isDigiLockerOpen}
+        onClose={() => setIsDigiLockerOpen(false)}
+        onSuccess={handleDigiLockerLoginSuccess}
+        darkMode={darkMode}
+      />
     </div>
   );
 };

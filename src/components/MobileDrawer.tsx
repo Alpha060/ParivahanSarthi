@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   X, 
   Home, 
@@ -72,6 +73,8 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
     isLoggedIn,
     logout
   } = useApp();
+
+  const navigate = useNavigate();
 
   if (!isMobileMenuOpen) return null;
 
@@ -158,7 +161,10 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                     {user.role === 'OFFICIAL' ? 'RTO Licensing Officer' : (user.role || 'Citizen')}
                   </span>
                   <button
-                    onClick={() => handleAction(logout)}
+                    onClick={() => handleAction(() => {
+                      logout();
+                      navigate('/', { replace: true });
+                    })}
                     className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
                   >
                     Sign Out
