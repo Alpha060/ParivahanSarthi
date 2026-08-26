@@ -30,6 +30,7 @@ import { api } from '../services/api';
 import { useApp } from '../context/AppContext';
 import { printOfficialSlip } from '../utils/printDocument';
 import { DigiLockerModal, DigiLockerFetchedData } from '../components/Modals/DigiLockerModal';
+import { OneQrJanSevaModal } from '../components/Modals/OneQrJanSevaModal';
 
 export interface UploadedDoc {
   id: string;
@@ -56,6 +57,7 @@ export const ApplyPage: React.FC = () => {
   const userHasDigiLocker = !!user?.isDigiLockerVerified;
   const [isDigiLockerOpen, setIsDigiLockerOpen] = useState(false);
   const [isDigiLockerVerified, setIsDigiLockerVerified] = useState(userHasDigiLocker);
+  const [isOneQrOpen, setIsOneQrOpen] = useState(false);
 
   // Form Fields - Step 1: Applicant Demographics
   const [applicantName, setApplicantName] = useState(user?.name || 'Krishna Mahto');
@@ -290,9 +292,25 @@ export const ApplyPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Dalal-Killer & Assisted Walk-In Bar */}
+          <div className="mt-4 pt-3 border-t border-slate-150 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+            <div className="flex items-center space-x-2 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-900 w-full sm:w-auto">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>100% Free Application • Zero Middleman / Cyber-Café Charges</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsOneQrOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 text-amber-900 dark:text-amber-200 text-xs font-bold border border-amber-300 dark:border-amber-700 transition flex items-center space-x-1.5 shadow-2xs w-full sm:w-auto justify-center cursor-pointer"
+            >
+              <span>📲 Jan Seva / CSC 1-Scan Pass</span>
+            </button>
+          </div>
+
           {/* 5-Stage Step Indicator */}
           {!submittedApp && (
-            <div className="grid grid-cols-5 gap-1.5 sm:gap-2 pt-6 mt-6 border-t border-slate-150 dark:border-slate-700">
+            <div className="grid grid-cols-5 gap-1.5 sm:gap-2 pt-4 mt-2 border-t border-slate-150 dark:border-slate-700">
               {[
                 { num: 1, label: '1. Applicant e-KYC' },
                 { num: 2, label: '2. Address & RTO' },
@@ -921,6 +939,30 @@ export const ApplyPage: React.FC = () => {
                     </button>
                   </div>
 
+                  {/* AI Document Doctor & Auto-Enhancer Banner */}
+                  <div className="p-3.5 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs">
+                        AI
+                      </div>
+                      <div>
+                        <div className="font-extrabold text-emerald-900 dark:text-emerald-200 flex items-center space-x-1.5">
+                          <span>AI Document Doctor & Auto-Enhancer</span>
+                          <span className="text-[9px] bg-emerald-200 dark:bg-emerald-800 text-emerald-950 dark:text-emerald-100 px-1.5 py-0.5 rounded font-black uppercase">Active</span>
+                        </div>
+                        <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                          Auto-crops borders, boosts contrast & auto-compresses to 200 KB standard (Zero Tech Hassle).
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right hidden sm:block">
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-900 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                        ✓ 99% Clarity Score
+                      </span>
+                    </div>
+                  </div>
+
                   {/* Option 2: Manual Document Upload Form */}
                   <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-3">
                     <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
@@ -1297,6 +1339,16 @@ export const ApplyPage: React.FC = () => {
         onClose={() => setIsDigiLockerOpen(false)}
         onSuccess={handleDigiLockerSuccess}
         darkMode={darkMode}
+      />
+
+      {/* One-QR Jan Seva Kendra / CSC Assisted Walk-In Pass Modal */}
+      <OneQrJanSevaModal
+        isOpen={isOneQrOpen}
+        onClose={() => setIsOneQrOpen(false)}
+        applicationId={`DRAFT-${selectedRto}-${mobile.slice(-4) || '8921'}`}
+        applicantName={applicantName}
+        serviceName={currentService.title}
+        rtoCode={selectedRto}
       />
     </div>
   );

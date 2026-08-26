@@ -148,27 +148,30 @@ export const api = {
   },
 
   async getApplicationById(applicationId: string): Promise<any> {
-    return safeFetch(
+    const res = await safeFetch(
       `${API_BASE_URL}/applications/${applicationId}`,
       undefined,
       () => {
         const stored = getLocalStored<any[]>(STORAGE_KEYS.APPLICATIONS, []);
         const found = stored.find(a => a.id === applicationId || a.applicationId === applicationId) ||
-                      MOCK_APPLICATIONS.find(a => a.id === applicationId);
+                      MOCK_APPLICATIONS.find(a => a.id === applicationId || (a as any).applicationId === applicationId);
 
         if (found) {
           const isApproved = found.status === 'APPROVED' || found.status === 'approved';
-          const currentStep = found.stepNumber || (isApproved ? 9 : 6);
+          const isPaid = found.paymentStatus === 'PAID' || found.paymentStatus === 'paid' || (found.feeAmount === 0);
+          const currentStep = found.stepNumber || found.currentStep || (isApproved ? 9 : (isPaid ? 3 : 1));
 
-          const steps = [
-            { stepNumber: 1, stepName: 'Application Submitted Online', isCompleted: true, completedAt: found.submittedDate || '14 May 2024, 10:15 AM' },
-            { stepNumber: 2, stepName: 'e-KYC Verification via UIDAI', isCompleted: true, completedAt: '14 May 2024, 10:18 AM' },
-            { stepNumber: 3, stepName: 'Document Upload & Scrutiny', isCompleted: true, completedAt: '14 May 2024, 11:30 AM' },
-            { stepNumber: 4, stepName: 'Fee Payment Reconciliation', isCompleted: true, completedAt: '14 May 2024, 11:35 AM' },
-            { stepNumber: 5, stepName: 'RTO Slot Booking Confirmed', isCompleted: true, completedAt: '15 May 2024, 09:00 AM' },
-            { stepNumber: 6, stepName: 'RTO Verification & Biometric Capture', isCompleted: currentStep >= 6, isCurrent: currentStep === 6, completedAt: currentStep >= 6 ? '16 May 2024, 02:40 PM' : undefined },
-            { stepNumber: 7, stepName: 'Driving Skill Test Clearance (Form 7B)', isCompleted: currentStep >= 7, isCurrent: currentStep === 7, remarks: currentStep < 7 ? 'Pending skill evaluation' : 'Passed with Grade A' },
-            { stepNumber: 8, stepName: 'Smart Card DL Printing & Quality Check', isCompleted: currentStep >= 8, isCurrent: currentStep === 8, remarks: currentStep >= 8 ? 'Printed & Encoded' : 'Pending test clearance' },
+          const formattedSubmittedDate = found.submittedDate || (found.submittedAt ? new Date(found.submittedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today');
+
+          const steps = (found.steps && found.steps.length === 9) ? found.steps : [
+            { stepNumber: 1, stepName: 'Application Submitted Online', isCompleted: true, completedAt: formattedSubmittedDate },
+            { stepNumber: 2, stepName: 'e-KYC Verification via UIDAI', isCompleted: true, completedAt: 'Verified via Aadhaar' },
+            { stepNumber: 3, stepName: 'Document Upload & Scrutiny', isCompleted: currentStep > 3, isCurrent: currentStep === 3, completedAt: currentStep > 3 ? 'Verified' : undefined, remarks: currentStep === 3 ? 'In Scrutiny Queue' : undefined },
+            { stepNumber: 4, stepName: 'Fee Payment Reconciliation', isCompleted: currentStep > 4 || isPaid, isCurrent: currentStep === 4, completedAt: isPaid ? 'Reconciled (Form TR-5)' : undefined, remarks: isPaid ? 'Settled' : 'Payment Pending' },
+            { stepNumber: 5, stepName: 'RTO Slot Booking Confirmed', isCompleted: currentStep > 5, isCurrent: currentStep === 5, remarks: currentStep >= 5 ? 'Slot Confirmed' : 'Pending booking' },
+            { stepNumber: 6, stepName: 'RTO Verification & Biometric Capture', isCompleted: currentStep > 6, isCurrent: currentStep === 6, completedAt: currentStep > 6 ? 'Passed' : undefined },
+            { stepNumber: 7, stepName: 'Driving Skill Test Clearance (Form 7B)', isCompleted: currentStep > 7, isCurrent: currentStep === 7, remarks: currentStep >= 7 ? 'Passed with Grade A' : 'Pending track test' },
+            { stepNumber: 8, stepName: 'Smart Card DL Printing & Quality Check', isCompleted: currentStep > 8, isCurrent: currentStep === 8, remarks: currentStep >= 8 ? 'Printed & Encoded' : 'Pending clearance' },
             { stepNumber: 9, stepName: 'Speed Post Dispatch to Residential Address', isCompleted: currentStep === 9, isCurrent: currentStep === 9, remarks: isApproved ? 'Delivered via Speed Post' : 'In transit' }
           ];
 
@@ -177,8 +180,15 @@ export const api = {
             application: {
               ...found,
               applicationId: found.id || found.applicationId,
+              currentStep,
+              currentStepName: found.currentStepName || steps.find((s: any) => s.isCurrent)?.stepName || 'Application Submitted Online',
+              status: isApproved ? 'APPROVED' : (found.status || 'IN_PROGRESS'),
+              statusLabel: isApproved ? 'Approved' : (found.statusLabel || (isPaid ? 'In Progress' : 'Draft (Payment Pending)')),
+              statusColor: isApproved ? '#137333' : (found.statusColor || (isPaid ? '#137333' : '#D97706')),
+              submittedAt: found.submittedAt || new Date().toISOString(),
+              submittedDate: formattedSubmittedDate,
               steps,
-              speedPostNo: isApproved ? 'EP928371928IN' : undefined
+              speedPostNo: isApproved ? (found.speedPostNo || 'EP928371928IN') : (found.speedPostNo || 'Pending Dispatch')
             }
           };
         }
@@ -196,20 +206,21 @@ export const api = {
             state: 'Jharkhand',
             rtoCode: 'JH-01',
             rtoName: 'Ranchi RTO (JH-01)',
-            currentStep: 6,
-            currentStepName: 'RTO Verification',
+            currentStep: 3,
+            currentStepName: 'Document Upload & Scrutiny',
             status: 'IN_PROGRESS',
             statusLabel: 'In Progress',
             statusColor: '#137333',
             submittedAt: new Date().toISOString(),
+            submittedDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
             steps: [
-              { stepNumber: 1, stepName: 'Application Submitted Online', isCompleted: true, completedAt: 'Today, 10:00 AM' },
-              { stepNumber: 2, stepName: 'e-KYC Verification via UIDAI', isCompleted: true, completedAt: 'Today, 10:05 AM' },
-              { stepNumber: 3, stepName: 'Document Upload & Scrutiny', isCompleted: true, completedAt: 'Today, 10:30 AM' },
-              { stepNumber: 4, stepName: 'Fee Payment Reconciliation', isCompleted: true, completedAt: 'Today, 10:35 AM' },
-              { stepNumber: 5, stepName: 'RTO Slot Booking Confirmed', isCompleted: true, completedAt: 'Today, 11:00 AM' },
-              { stepNumber: 6, stepName: 'RTO Verification & Biometric Capture', isCompleted: true, isCurrent: true, completedAt: 'In Progress' },
-              { stepNumber: 7, stepName: 'Driving Skill Test Clearance (Form 7B)', isCompleted: false, remarks: 'Scheduled' },
+              { stepNumber: 1, stepName: 'Application Submitted Online', isCompleted: true, completedAt: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) },
+              { stepNumber: 2, stepName: 'e-KYC Verification via UIDAI', isCompleted: true, completedAt: 'Verified via Aadhaar' },
+              { stepNumber: 3, stepName: 'Document Upload & Scrutiny', isCompleted: false, isCurrent: true, remarks: 'In RTO Scrutiny Queue' },
+              { stepNumber: 4, stepName: 'Fee Payment Reconciliation', isCompleted: true, completedAt: 'Reconciled (Form TR-5)' },
+              { stepNumber: 5, stepName: 'RTO Slot Booking Confirmed', isCompleted: false, remarks: 'Available' },
+              { stepNumber: 6, stepName: 'RTO Verification & Biometric Capture', isCompleted: false },
+              { stepNumber: 7, stepName: 'Driving Skill Test Clearance (Form 7B)', isCompleted: false },
               { stepNumber: 8, stepName: 'Smart Card DL Printing & Quality Check', isCompleted: false },
               { stepNumber: 9, stepName: 'Speed Post Dispatch to Residential Address', isCompleted: false }
             ]
@@ -217,6 +228,34 @@ export const api = {
         };
       }
     );
+
+    if (res && res.success && res.application) {
+      const app = res.application;
+      if (!app.submittedDate && app.submittedAt) {
+        try {
+          app.submittedDate = new Date(app.submittedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        } catch {
+          app.submittedDate = 'Today';
+        }
+      }
+      if (!app.steps || app.steps.length === 0) {
+        const isApproved = app.status === 'APPROVED' || app.status === 'approved';
+        const currentStep = app.currentStep || app.stepNumber || 3;
+        app.steps = [
+          { stepNumber: 1, stepName: 'Application Submitted Online', isCompleted: true, completedAt: app.submittedDate || 'Today' },
+          { stepNumber: 2, stepName: 'e-KYC Verification via UIDAI', isCompleted: true, completedAt: 'UIDAI e-KYC' },
+          { stepNumber: 3, stepName: 'Document Upload & Scrutiny', isCompleted: currentStep > 3, isCurrent: currentStep === 3, remarks: currentStep === 3 ? 'In Scrutiny Queue' : undefined },
+          { stepNumber: 4, stepName: 'Fee Payment Reconciliation', isCompleted: currentStep >= 4, isCurrent: currentStep === 4, completedAt: 'TR-5 Receipt' },
+          { stepNumber: 5, stepName: 'RTO Slot Booking Confirmed', isCompleted: currentStep > 5, isCurrent: currentStep === 5 },
+          { stepNumber: 6, stepName: 'RTO Verification & Biometric Capture', isCompleted: currentStep > 6, isCurrent: currentStep === 6 },
+          { stepNumber: 7, stepName: 'Driving Skill Test Clearance (Form 7B)', isCompleted: currentStep > 7, isCurrent: currentStep === 7 },
+          { stepNumber: 8, stepName: 'Smart Card DL Printing & Quality Check', isCompleted: currentStep > 8, isCurrent: currentStep === 8 },
+          { stepNumber: 9, stepName: 'Speed Post Dispatch to Residential Address', isCompleted: currentStep === 9, isCurrent: currentStep === 9, remarks: isApproved ? 'Delivered' : 'In transit' }
+        ];
+      }
+    }
+
+    return res;
   },
 
   async submitApplication(data: {
@@ -232,7 +271,7 @@ export const api = {
     paymentStatus?: 'PAID' | 'PENDING';
     status?: string;
   }): Promise<any> {
-    return safeFetch(
+    const res = await safeFetch(
       `${API_BASE_URL}/applications`,
       {
         method: 'POST',
@@ -256,15 +295,16 @@ export const api = {
           state: data.state || 'Jharkhand',
           rtoCode: data.rtoCode,
           rtoName: data.rtoName || `District Transport Office (${data.rtoCode})`,
-          currentStep: 1,
-          stepNumber: 1,
+          currentStep: isPaid ? 3 : 1,
+          stepNumber: isPaid ? 3 : 1,
           totalSteps: 9,
-          currentStepName: isPaid ? 'Application Submitted Online' : 'Draft Saved - Payment Pending',
-          status: isPaid ? 'in-progress' : 'DRAFT_PAYMENT_PENDING',
+          currentStepName: isPaid ? 'Document Upload & Scrutiny' : 'Draft Saved - Payment Pending',
+          status: isPaid ? 'IN_PROGRESS' : 'DRAFT_PAYMENT_PENDING',
           statusLabel: isPaid ? 'In Progress' : 'Draft (Payment Pending)',
           statusColor: isPaid ? '#137333' : '#D97706',
           paymentStatus: isPaid ? 'PAID' : 'PENDING',
           feeAmount: data.feeAmount || 0,
+          submittedAt: new Date().toISOString(),
           submittedDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
         };
 
@@ -281,6 +321,21 @@ export const api = {
         };
       }
     );
+
+    if (res && res.success && res.application) {
+      const existing = getLocalStored<any[]>(STORAGE_KEYS.APPLICATIONS, []);
+      const formattedApp = {
+        ...res.application,
+        id: res.application.applicationId || res.application.id,
+        applicationId: res.application.applicationId || res.application.id,
+        submittedAt: res.application.submittedAt || new Date().toISOString(),
+        submittedDate: res.application.submittedDate || new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      };
+      const filtered = existing.filter(a => (a.applicationId || a.id) !== formattedApp.applicationId);
+      setLocalStored(STORAGE_KEYS.APPLICATIONS, [formattedApp, ...filtered]);
+    }
+
+    return res;
   },
 
   async settleApplicationPayment(applicationId: string, paymentMode: string): Promise<any> {

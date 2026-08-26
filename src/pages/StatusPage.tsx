@@ -24,6 +24,7 @@ import { api } from '../services/api';
 import { useApp } from '../context/AppContext';
 import { DigitalLicenceCard } from '../components/DigitalLicenceCard';
 import { printOfficialSlip } from '../utils/printDocument';
+import { WhatsAppAlertsModal } from '../components/Modals/WhatsAppAlertsModal';
 
 export const StatusPage: React.FC = () => {
   const { id: routeAppId } = useParams<{ id?: string }>();
@@ -42,6 +43,7 @@ export const StatusPage: React.FC = () => {
   const [reconciledMsg, setReconciledMsg] = useState<string | null>(null);
   const [showDlCard, setShowDlCard] = useState(false);
   const [certificateData, setCertificateData] = useState<any>(null);
+  const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
 
   useEffect(() => {
     setAppId(targetId);
@@ -218,8 +220,14 @@ export const StatusPage: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 sm:pb-6 border-b border-slate-150 dark:border-slate-700">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                      {applicationData.statusLabel}
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                      applicationData.status === 'APPROVED'
+                        ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                        : applicationData.status === 'DRAFT_PAYMENT_PENDING'
+                        ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
+                        : 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300'
+                    }`}>
+                      {applicationData.statusLabel || (applicationData.status === 'APPROVED' ? 'Approved' : 'In Progress')}
                     </span>
                     <span className="text-xs font-extrabold text-slate-900 dark:text-white">
                       {applicationData.applicationId}
@@ -270,7 +278,9 @@ export const StatusPage: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">Filing Date</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{new Date(applicationData.submittedAt).toLocaleDateString()}</p>
+                  <p className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                    {applicationData.submittedAt ? new Date(applicationData.submittedAt).toLocaleDateString('en-GB') : (applicationData.submittedDate || '14 May 2024')}
+                  </p>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">Speed Post Courier</span>
@@ -303,14 +313,27 @@ export const StatusPage: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => navigate('/grievance')}
-                  className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto shadow-2xs"
-                >
-                  <MessageSquareWarning className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Escalate Delay (CPGRAMS)</span>
-                </button>
+                <div className="flex items-center space-x-2 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsWhatsAppOpen(true)}
+                    className="px-3.5 py-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] active:scale-95 text-white text-xs font-extrabold flex items-center gap-2 transition cursor-pointer shadow-sm border border-emerald-600/30"
+                  >
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                      <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.669-.699c.969.57 1.776.815 2.788.815 3.182 0 5.767-2.587 5.768-5.766.001-3.182-2.585-5.768-5.765-5.768zm3.377 8.21c-.144.405-.837.774-1.17.824-.312.045-.694.072-2.029-.481-1.637-.678-2.684-2.338-2.766-2.447-.082-.109-.652-.868-.652-1.657 0-.789.414-1.178.561-1.338.147-.16.32-.201.427-.201.107 0 .213.001.307.005.099.005.231-.038.361.275.137.33.468 1.144.509 1.228.041.084.068.183.013.294-.055.111-.082.18-.163.275-.082.095-.172.213-.245.286-.082.082-.168.172-.072.337.095.165.424.7.91 1.134.625.558 1.152.73 1.317.812.165.082.261.069.358-.041.096-.11.413-.481.523-.646.11-.165.22-.138.371-.083.151.055.959.452 1.124.535.165.082.275.124.316.193.041.069.041.405-.103.81zM12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.98-1.39A9.957 9.957 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18.167a8.14 8.14 0 0 1-4.37-1.264l-.313-.186-2.947.773.787-2.873-.204-.325A8.147 8.147 0 0 1 3.833 12c0-4.503 3.664-8.167 8.167-8.167 4.503 0 8.167 3.664 8.167 8.167 0 4.503-3.664 8.167-8.167 8.167z"/>
+                    </svg>
+                    <span>WhatsApp Live Radar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate('/grievance')}
+                    className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                  >
+                    <MessageSquareWarning className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Escalate Delay (CPGRAMS)</span>
+                  </button>
+                </div>
               </div>
 
               {/* 9-Stage Milestone Progression */}
@@ -464,6 +487,15 @@ export const StatusPage: React.FC = () => {
             dlData={certificateData}
           />
         )}
+
+        {/* WhatsApp Live Radar Modal */}
+        <WhatsAppAlertsModal
+          isOpen={isWhatsAppOpen}
+          onClose={() => setIsWhatsAppOpen(false)}
+          applicationId={applicationData?.applicationId || appId}
+          applicantName={applicationData?.applicantName || 'Applicant'}
+          mobile={applicationData?.mobile || '9876543210'}
+        />
 
       </div>
     </div>

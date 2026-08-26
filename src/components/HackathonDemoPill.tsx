@@ -20,7 +20,8 @@ import {
   Stethoscope,
   BookOpen,
   Users,
-  AlertTriangle
+  AlertTriangle,
+  Sparkles
 } from 'lucide-react';
 
 export const HackathonDemoPill: React.FC = () => {
@@ -60,50 +61,56 @@ export const HackathonDemoPill: React.FC = () => {
 
   const demoScenarios = [
     {
+      icon: Sparkles,
+      title: '🎤 Bhasha Sahayak Voice AI & Page Walkthrough',
+      route: '/services',
+      badge: 'Voice AI'
+    },
+    {
+      icon: Award,
+      title: '🎧 Audio LL Mock Exam & 3D ADTT Track Guide',
+      route: '/mock-test',
+      badge: 'Bilingual Audio'
+    },
+    {
+      icon: FileText,
+      title: '📸 AI Document Doctor & Jan Seva QR Pass',
+      route: '/apply/ll-new',
+      badge: '0-KB Tension'
+    },
+    {
       icon: FileCheck2,
-      title: '1. In-Progress 9-Step Timeline & Bank Reconcile',
+      title: '📦 Live Journey, WhatsApp Radar & Speed Post',
       route: '/status?appId=DL1234567890123',
       badge: 'Step 6 Live'
     },
     {
       icon: CheckCircle2,
-      title: '2. Approved DL with Digital PVC Card & QR',
+      title: '🪪 Approved DL with Digital PVC Card & QR',
       route: '/status?appId=DL9876543210987',
       badge: 'Approved DL'
     },
     {
-      icon: FileText,
-      title: '3. Form 2 Contactless e-Application Wizard',
-      route: '/apply/ll-new',
-      badge: 'Live Prisma DB'
-    },
-    {
-      icon: Award,
-      title: '4. Computerized LL Mock Skill Exam',
-      route: '/mock-test',
-      badge: 'Interactive'
-    },
-    {
       icon: Calendar,
-      title: '5. Automated RTO Track Slot Booking',
+      title: '📅 Automated RTO Track Slot Booking',
       route: '/appointments',
       badge: 'Live Token #042'
     },
     {
       icon: Calculator,
-      title: '6. CMVR Rule 32 Fee Engine & e-Payment',
+      title: '💰 CMVR Rule 32 Transparent Fee Engine',
       route: '/fees',
       badge: 'Statutory'
     },
     {
       icon: MapPin,
-      title: '7. 36 States/UTs National RTO Locator',
+      title: '📍 36 States/UTs National RTO Locator',
       route: '/rto-directory',
       badge: 'Verified'
     },
     {
       icon: Headphones,
-      title: '8. CPGRAMS Nodal Grievance Redressal',
+      title: '⚖️ CPGRAMS Nodal Grievance Redressal',
       route: '/grievance',
       badge: 'Helpdesk'
     },

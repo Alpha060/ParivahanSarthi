@@ -34,7 +34,7 @@ import { DtsPortalPage } from './pages/DtsPortalPage';
 import { CounterDeskPage } from './pages/CounterDeskPage';
 import { EnforcementPortalPage } from './pages/EnforcementPortalPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { HackathonDemoPill } from './components/HackathonDemoPill';
+import { BhashaSahayakWidget } from './components/BhashaSahayakWidget';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Global Modals
@@ -362,8 +362,8 @@ function AppLayout() {
         onSelectState={(st) => setCurrentState(st)}
       />
 
-      {/* Hackathon Evaluation & Judge Shortcuts Floating Tour */}
-      <HackathonDemoPill />
+      {/* Bhasha Sahayak Voice AI Assistant for Citizens */}
+      <BhashaSahayakWidget />
 
     </div>
   );
