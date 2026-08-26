@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HeroSection } from '../components/HeroSection';
-import { JudgeInnovationShowcase } from '../components/JudgeInnovationShowcase';
 import { QuickServices } from '../components/QuickServices';
 import { MyApplications } from '../components/MyApplications';
 import { UtilityCards } from '../components/UtilityCards';
@@ -32,9 +31,6 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenStateSelector }) => {
         onSelectService={(serviceId) => navigate(`/apply/${serviceId}`)}
         onViewAllServices={() => navigate('/services')}
       />
-
-      {/* Hackathon Judge Spotlight: 10x Better Than Govt Portals */}
-      <JudgeInnovationShowcase />
 
       {/* My Applications Showcase Carousel */}
       <MyApplications
