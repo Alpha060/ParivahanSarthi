@@ -141,8 +141,12 @@ export const api = {
       undefined,
       () => {
         const stored = getLocalStored<any[]>(STORAGE_KEYS.APPLICATIONS, []);
-        const merged = [...stored, ...MOCK_APPLICATIONS];
-        return { success: true, applications: merged };
+        const currentUser = getLocalStored<any>(STORAGE_KEYS.USER, null);
+        if (currentUser && currentUser.mobile) {
+          const userApps = stored.filter((a: any) => a.mobile === currentUser.mobile);
+          return { success: true, applications: userApps };
+        }
+        return { success: true, applications: stored };
       }
     );
   },

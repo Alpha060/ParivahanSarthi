@@ -30,7 +30,7 @@ export const ApplicationsDashboardPage: React.FC = () => {
   const { darkMode, t, user, isLoggedIn } = useApp();
   const [activeFilter, setActiveFilter] = useState<'all' | 'in-progress' | 'draft-unpaid' | 'approved' | 'upcoming'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [applications, setApplications] = useState<any[]>(MOCK_APPLICATIONS);
+  const [applications, setApplications] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDlCertificate, setSelectedDlCertificate] = useState<any>(null);
   const [showDlModal, setShowDlModal] = useState(false);
@@ -39,17 +39,23 @@ export const ApplicationsDashboardPage: React.FC = () => {
 
   useEffect(() => {
     fetchApplications();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, user]);
 
   const fetchApplications = async () => {
     setIsLoading(true);
     try {
       const res = await api.getApplications();
-      if (res.success && res.applications && res.applications.length > 0) {
-        setApplications(res.applications);
+      if (res.success && Array.isArray(res.applications)) {
+        const citizenApps = res.applications.filter((app: any) => {
+          if (!user?.mobile) return true;
+          return app.mobile === user.mobile;
+        });
+        setApplications(citizenApps);
+      } else {
+        setApplications([]);
       }
     } catch (err) {
-      // Keep mock fallback
+      setApplications([]);
     } finally {
       setIsLoading(false);
     }
@@ -262,10 +268,23 @@ export const ApplicationsDashboardPage: React.FC = () => {
 
         {/* Applications List Grid */}
         {filteredApps.length === 0 ? (
-          <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-8">
-            <FolderKanban className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-slate-800 dark:text-white">No applications match your filter</h3>
-            <p className="text-xs text-slate-500 mt-1">Try changing search query or tab filter.</p>
+          <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-8 space-y-3">
+            <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-[#0056D2] dark:text-blue-400 flex items-center justify-center mx-auto shadow-xs">
+              <FolderKanban className="w-8 h-8" />
+            </div>
+            <h3 className="text-base font-bold text-slate-800 dark:text-white">No applications found in your citizen dossier</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              You do not have any active or draft applications under mobile {user?.mobile || 'this account'}. Apply for a new Learner Licence or transport service to get started.
+            </p>
+            <div className="pt-2">
+              <Link
+                to="/services"
+                className="inline-flex items-center gap-2 bg-[#0056D2] hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Apply for Transport Service</span>
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">

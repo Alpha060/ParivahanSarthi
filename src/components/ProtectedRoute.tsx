@@ -116,12 +116,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     requiredRole === 'LOGGED_IN' ||
     requiredRole === user.role ||
     (requiredRole === 'OFFICIAL' && officialRoles.includes(user.role)) ||
-    (requiredRole === 'CITIZEN' && (user.role === 'CITIZEN' || !user.role || officialRoles.includes(user.role)));
+    (requiredRole === 'CITIZEN' && (user.role === 'CITIZEN' || !user.role));
 
   if (!hasAccess) {
     const isUserOfficer = officialRoles.includes(user.role);
-    const destinationDesk = isUserOfficer ? '/officer-dashboard' : '/applications';
-    const destinationLabel = isUserOfficer ? 'Go to Officer Command Workdesk' : 'My Citizen Dossiers';
+    const destinationDesk = isUserOfficer ? '/officer-dashboard' : '/';
+    const destinationLabel = isUserOfficer ? 'Go to Officer Command Workdesk' : 'Return to Citizen Portal';
 
     return (
       <div className={`min-h-[80vh] flex items-center justify-center p-4 transition-colors ${
@@ -136,13 +136,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
           <div>
             <span className="px-3 py-1 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300 text-[10px] font-black uppercase tracking-wider">
-              Security Barrier 403
+              Role Access Boundary
             </span>
             <h2 className="text-xl font-black text-slate-900 dark:text-white mt-2">
-              Unauthorized Role Access
+              {isUserOfficer && requiredRole === 'CITIZEN' ? 'Official Session Active' : 'Unauthorized Role Access'}
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-              You are currently authenticated as <strong>{user.name}</strong> ({user.role}). This portal area requires <strong>{requiredRole}</strong> clearance.
+              {isUserOfficer && requiredRole === 'CITIZEN' 
+                ? `You are logged in with RTO Official credentials (${user.name} • ${user.role}). Citizen dossiers are private personal records. To review and process citizen applications, please use the Officer Command Workdesk.`
+                : `You are currently authenticated as ${user.name} (${user.role}). This portal section requires ${requiredRole} credentials.`
+              }
             </p>
           </div>
 
@@ -152,7 +155,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
               <strong className="text-emerald-600 font-bold uppercase">{user.role}</strong>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Required Role:</span>
+              <span className="text-slate-400">Required Clearance:</span>
               <strong className="text-amber-600 font-bold uppercase">{requiredRole}</strong>
             </div>
           </div>
